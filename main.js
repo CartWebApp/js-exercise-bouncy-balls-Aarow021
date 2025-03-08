@@ -69,13 +69,13 @@ class Ball {
 
   //fuses this ball with another. The largest one is kept
   fuse(ball2) {
-    let biggerBall = ball2.radius > this.radius ? ball2 : this;
-    let smallerBall = ball2.radius < this.radius ? ball2 : this;
+    let biggerBall = ball2.mass > this.mass ? ball2 : this;
+    let smallerBall = ball2.mass < this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
-    biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255)) / 2;
-    biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255)) / 2;
-    biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255)) / 2;
+    biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
+    biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
+    biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
 
     //momentum
     biggerBall.momentumX += smallerBall.momentumX;
@@ -93,6 +93,24 @@ class Ball {
     balls.splice(balls.indexOf(smallerBall), 1);
   }
 
+  bounce(ball2) {
+    //whichever has the most momentum
+    let biggerBall = Math.abs(ball2.momentumX) + Math.abs(ball2.momentumY) > Math.abs(this.momentumX) + Math.abs(this.momentumY) ? ball2 : this;
+    let smallerBall = Math.abs(ball2.momentumX) + Math.abs(ball2.momentumY) < Math.abs(this.momentumX) + Math.abs(this.momentumY) ? ball2 : this;
+
+    let massRatio = smallerBall.mass / biggerBall.mass;
+
+    //Transfer momentum from most momentum to least momentum
+    let transferAmount = [biggerBall.momentumX * massRatio, biggerBall.momentumY  * massRatio];
+    biggerBall.momentumX -= transferAmount[0];
+    biggerBall.momentumY -= transferAmount[1];
+    smallerBall.momentumX += transferAmount[0];
+    smallerBall.momentumY += transferAmount[1];
+
+    biggerBall.calcVelocity();
+    smallerBall.calcVelocity();
+  }
+
   //handles ball collision checking and actions
   collisionDetect() {
     for (let j = 0; j < balls.length; j++) {
@@ -102,7 +120,12 @@ class Ball {
 
         //collision condition
         if (distance < this.radius + balls[j].radius) {
-          this.fuse(balls[j])
+          //If the velocity between the two are great enough
+          if (Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > 10) {
+            this.fuse(balls[j])
+          } else {
+            this.bounce(balls[j])
+          }
         }
       }
     }
@@ -179,8 +202,8 @@ function addBalls(num, size, x, y) {
       // away from the edge of the canvas, to avoid drawing errors
       x || random(0 + radius,width - radius),
       y || random(0 + radius,height - radius),
-      random(-7,7),
-      random(-7,7),
+      random(-3,3),
+      random(-3,3),
       [random(0,255), random(0,255), random(0,255)],
       radius
     );
@@ -199,7 +222,7 @@ window.addEventListener('resize', () => {
 window.addEventListener('click', clickHandler)
 
 //initiates the balls
-addBalls(10);
+addBalls(100);
 
 //initiates the loop
 loop()
