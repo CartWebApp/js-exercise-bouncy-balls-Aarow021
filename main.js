@@ -23,6 +23,35 @@ function getDistance([x1, y1], [x2, y2]) {
   return distance
 }
 
+//calculates the dot product between 2 vectors
+function dotProduct(vector1, vector2) {
+  return (vector1[0] * vector2[1]) - (vector1[1] * vector2[0])
+}
+
+//calculates the angle between 2 points
+function getAngle([x1, y1], [x2, y2]) {
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  return Math.atan2(dy, dx);
+}
+
+//gets the angle of a vector
+function vectorAngle([x,y]) {
+  return Math.atan2(y, x)
+}
+
+//returns x and y components of a magnitude
+function getComponents(magnitude, angle) {
+  let x = magnitude * Math.cos(angle)
+  let y = magnitude * Math.sin(angle)
+  return {x, y}
+}
+
+//returns the magnitude of a vector
+function getMagnitude([x, y]) {
+  return Math.sqrt((x*x) + (y*y))
+}
+
 //ball class
 class Ball {
   constructor(x, y, velX, velY, [r, g, b], radius, mass) {
@@ -50,8 +79,17 @@ class Ball {
     ctx.fill();
   }
 
+  //gets area of ball
   getArea() {
     return Math.PI * this.radius ** 2
+  }
+
+  //sets the velocity of ball
+  setVelocity(x, y) {
+    this.velX = x;
+    this.velY = y;
+    this.momentumX = x * this.mass;
+    this.momentumY = y * this.mass;
   }
 
   //a = pi * r^2
@@ -67,6 +105,23 @@ class Ball {
     this.velY = this.momentumY / this.mass;
   }
 
+  //gets the resulting velocity of an elastic collision
+  //got equation from https://en.wikipedia.org/wiki/Elastic_collision#Two-dimensional_collision_with_two_moving_objects 
+  getCollisionVector(ball2) {
+    const v1 = getMagnitude([this.velX, this.velY]),
+          v2 = getMagnitude([ball2.velX, ball2.velY]),
+          angle1 = vectorAngle([this.velX, this.velY]),
+          angle2 = vectorAngle([ball2.velX, ball2.velY]),
+          m1 = this.mass,
+          m2 = ball2.mass,
+          cA = getAngle([this.x, this.y], [ball2.x, ball2.y]) //contact angle
+
+    const part1 = (v1 * Math.cos(angle1 - cA) * (m1 - m2) + 2 * m2 * v2 * Math.cos(angle2 - cA)) / (m1 + m2);
+    const vx = part1 * Math.cos(cA) + v1 * Math.sin(angle1 - cA) * Math.cos(cA + Math.PI/2);
+    const vy = part1 * Math.sin(cA) + v1 * Math.sin(angle1 - cA) * Math.sin(cA + Math.PI/2);
+    return {x: vx, y: vy};
+  }
+
   //fuses this ball with another. The largest one is kept
   fuse(ball2) {
     let biggerBall = ball2.mass > this.mass ? ball2 : this;
@@ -76,14 +131,11 @@ class Ball {
     biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
     biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
     biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
-
     //momentum
     biggerBall.momentumX += smallerBall.momentumX;
     biggerBall.momentumY += smallerBall.momentumY;
     //mass
     biggerBall.mass += smallerBall.mass;
-    //radius
-    biggerBall.radius = (biggerBall.radius + smallerBall.radius * .9);
 
     //Calculates new velocity and radius from new mass and momentum
     biggerBall.calcVelocity();
@@ -93,22 +145,12 @@ class Ball {
     balls.splice(balls.indexOf(smallerBall), 1);
   }
 
+  //does elastic collision with other ball
   bounce(ball2) {
-    //whichever has the most momentum
-    let biggerBall = Math.abs(ball2.momentumX) + Math.abs(ball2.momentumY) > Math.abs(this.momentumX) + Math.abs(this.momentumY) ? ball2 : this;
-    let smallerBall = Math.abs(ball2.momentumX) + Math.abs(ball2.momentumY) < Math.abs(this.momentumX) + Math.abs(this.momentumY) ? ball2 : this;
+    let newVectors = {ball1: this.getCollisionVector(ball2), ball2: ball2.getCollisionVector(this)}
 
-    let massRatio = smallerBall.mass / biggerBall.mass;
-
-    //Transfer momentum from most momentum to least momentum
-    let transferAmount = [biggerBall.momentumX * massRatio, biggerBall.momentumY  * massRatio];
-    biggerBall.momentumX -= transferAmount[0];
-    biggerBall.momentumY -= transferAmount[1];
-    smallerBall.momentumX += transferAmount[0];
-    smallerBall.momentumY += transferAmount[1];
-
-    biggerBall.calcVelocity();
-    smallerBall.calcVelocity();
+    this.setVelocity(newVectors.ball1.x, newVectors.ball1.y)
+    ball2.setVelocity(newVectors.ball2.x, newVectors.ball2.y)
   }
 
   //handles ball collision checking and actions
@@ -222,7 +264,7 @@ window.addEventListener('resize', () => {
 window.addEventListener('click', clickHandler)
 
 //initiates the balls
-addBalls(100);
+addBalls(1000);
 
 //initiates the loop
 loop()
