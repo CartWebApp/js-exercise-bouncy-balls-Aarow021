@@ -8,6 +8,8 @@ let width = canvas.width = pageWrapper.clientWidth;
 let height = canvas.height = pageWrapper.clientHeight;
 
 let balls = [];
+let requestId;
+let playing = true;
 
 //configurable settings
 let friction = 0;
@@ -268,7 +270,7 @@ function loop() {
     balls[i].collisionDetect();
   }
 
-  requestAnimationFrame(loop);
+  requestId = requestAnimationFrame(loop);
 }
 
 //handles what happens when the page is clicked
@@ -302,7 +304,44 @@ function addBalls(num, size, x, y, vx, vy) {
   }    
 }
 
-//Enables canvas to respond to screen size changes
+function stopCanvas() {
+  playing = false;
+  cancelAnimationFrame(requestId);
+}
+
+function startCanvas() {
+  if (playing) { return }
+  playing = true;
+  requestAnimationFrame(loop);
+}
+
+
+//handles every button press
+function buttonHandler(e) {
+  const btn = e.target;
+  const id = btn.id;
+  if (id === 'menu-toggle') {
+    btn.classList.toggle('active')
+  } else if (id === 'pause') {
+    stopCanvas();
+  } else if (id === 'play') {
+    startCanvas();
+  } else if (id === 'reset') {
+    balls = [];
+    addBalls(ballCount);
+  } else if (id === 'settings-toggle') {
+    document.getElementById('settings').classList.toggle('hidden');
+  } else if (id === 'settings-close') {
+    document.getElementById('settings').classList.add('hidden');
+  }
+}
+
+//adds button handler to each button
+document.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', buttonHandler);
+})
+
+//enables canvas to respond to screen size changes
 window.addEventListener('resize', () => {
   width = canvas.width = pageWrapper.clientWidth;
   height = canvas.height = pageWrapper.clientHeight;

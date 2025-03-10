@@ -2,32 +2,41 @@
 <html>
   <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Ballbox</title>
     <link rel="icon" type="image/x-icon" href="/imgs/favicon.svg">
     <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="page-wrapper">
       <h1>ballbox</h1>
-      <canvas></canvas>
+      <div id="canvas-wrapper">
+        <canvas></canvas>
+      </div>
       <nav>
-        <div class="icon-wrap">
-          <button type="button" id="menu-toggle"></button>
-        </div>
-          <button type="button" id="settings-toggle"></button>
-        </div>
-        <div class="icon-wrap">
-          <button type="button" id="play"></button>
-        </div>
-        <div class="icon-wrap">
-          <button type="button" id="reset"></button>
-        </div>
-        <div class="icon-wrap">
-          <button type="button" id="pause"></button>
+        <div class="wrap">
+          <div class="icon-wrap">
+            <button type="button" id="menu-toggle" class="active"></button>
+          </div>
+          <div class="icon-wrap">
+            <button type="button" id="settings-toggle"></button>
+          </div>
+          <div class="icon-wrap">
+            <button type="button" id="play"></button>
+          </div>
+          <div class="icon-wrap">
+            <button type="button" id="pause"></button>
+          </div>
+          <div class="icon-wrap">
+            <button type="button" id="reset"></button>
+          </div>
         </div>
       </nav>
-      <section id="settings">
-        <div class="section-heading">
+      <section id="settings" class="hidden">
+        <div class="settings-heading">
           <h2>Settings</h2>
           <div class="icon-wrap">
             <button type="button" id="settings-close"></button>
