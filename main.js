@@ -8,6 +8,9 @@ let height = canvas.height = window.innerHeight;
 
 let balls = [];
 
+let friction = .001;
+let gravity = .1;
+
 // function to generate random number
 
 function random(min, max) {
@@ -224,9 +227,20 @@ class Ball {
 
     this.calcVelocity();
 
+    this.momentumX *= 1 - friction;
+    this.momentumY *= 1 - friction;
+    this.momentumY += gravity * this.mass;
+
+    this.calcVelocity();
+    if (Math.abs(this.velX) < .01 && friction > 0) {
+      this.momentumX = 0;
+    }
+    if (Math.abs(this.velY) < .01 && friction > 0) {
+      this.momentumY = 0;
+    }
+
     this.x += this.velX;
     this.y += this.velY;
-
   }
   
   //splits a ball into 2 or more
@@ -238,7 +252,7 @@ class Ball {
 
 //main animation loop
 function loop() {
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillStyle = 'rgba(0, 0, 0, 1)';
   ctx.fillRect(0, 0, width, height);
 
   for (let i = 0; i < balls.length; i++) {
