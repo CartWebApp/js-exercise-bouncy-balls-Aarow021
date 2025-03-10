@@ -69,6 +69,7 @@ class Ball {
     this.momentumY = this.mass * velY;
     this.calcVelocity();
     this.calcRadius();
+    this.isColliding = false;
   }
 
   //draws
@@ -103,6 +104,18 @@ class Ball {
   calcVelocity() {
     this.velX = this.momentumX / this.mass;
     this.velY = this.momentumY / this.mass;
+  }
+
+  //returns whether the ball is in another ball and rebounding (not working)
+  isRebounding(ball2) {
+    let dx = this.x - ball2.x;
+    let dy = this.y - ball2.y;
+    let dsq = dx*dx + dy*dy; //square of distance between circles
+  
+    let dv = 2*(this.velX*dx + this.velY*dy)/dsq; //velocity change factor
+    let isRebounding = (dv > 0);
+
+    return isRebounding;
   }
 
   //gets the resulting velocity of an elastic collision
@@ -147,21 +160,35 @@ class Ball {
 
   //does elastic collision with other ball
   bounce(ball2) {
-    let newVectors = {ball1: this.getCollisionVector(ball2), ball2: ball2.getCollisionVector(this)}
+    let newVectors = {ball1: this.getCollisionVector(ball2), ball2: ball2.getCollisionVector(this)};
 
-    this.setVelocity(newVectors.ball1.x, newVectors.ball1.y)
-    ball2.setVelocity(newVectors.ball2.x, newVectors.ball2.y)
+    this.setVelocity(newVectors.ball1.x, newVectors.ball1.y);
+    ball2.setVelocity(newVectors.ball2.x, newVectors.ball2.y);
+    this.unstick(ball2);
+  }
+
+  //seperates balls so they don't orbit
+  unstick(ball2) {
+    let angle = getAngle([this.x, this.y], [ball2.x, ball2.y]);
+    let distance = getDistance([this.x, this.y], [ball2.x, ball2.y]);
+    let minDistance = this.radius + ball2.radius;
+    let spread = minDistance - distance;
+    let ax = spread * Math.cos(angle);
+    let ay = spread * Math.sin(angle);
+    this.x -= ax;
+    this.y -= ay;
+    ball2.x += ax;
+    ball2.y += ay
   }
 
   //handles ball collision checking and actions
   collisionDetect() {
     for (let j = 0; j < balls.length; j++) {
       if (!(this === balls[j])) {
-
         const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
 
         //collision condition
-        if (distance < this.radius + balls[j].radius) {
+        if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
           //If the velocity between the two are great enough
           if (Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > 10) {
             this.fuse(balls[j])
@@ -244,8 +271,8 @@ function addBalls(num, size, x, y) {
       // away from the edge of the canvas, to avoid drawing errors
       x || random(0 + radius,width - radius),
       y || random(0 + radius,height - radius),
-      random(-3,3),
-      random(-3,3),
+      random(-7,7),
+      random(-7,7),
       [random(0,255), random(0,255), random(0,255)],
       radius
     );
@@ -264,7 +291,7 @@ window.addEventListener('resize', () => {
 window.addEventListener('click', clickHandler)
 
 //initiates the balls
-addBalls(1000);
+addBalls(100);
 
 //initiates the loop
 loop()
