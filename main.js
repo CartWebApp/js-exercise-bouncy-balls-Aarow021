@@ -2,9 +2,10 @@
 
 const canvas = document.querySelector('canvas');
 const ctx = canvas.getContext('2d');
+const pageWrapper = document.getElementById('page-wrapper');
 
-let width = canvas.width = window.innerWidth;
-let height = canvas.height = window.innerHeight;
+let width = canvas.width = pageWrapper.clientWidth;
+let height = canvas.height = pageWrapper.clientHeight;
 
 let balls = [];
 
@@ -297,8 +298,8 @@ function addBalls(num, size, x, y) {
 
 //Enables canvas to respond to screen size changes
 window.addEventListener('resize', () => {
-  width = canvas.width = window.innerWidth;
-  height = canvas.height = window.innerHeight;
+  width = canvas.width = pageWrapper.clientWidth;
+  height = canvas.height = pageWrapper.clientHeight;
 })
 
 //adds click event

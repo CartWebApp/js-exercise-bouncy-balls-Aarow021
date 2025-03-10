@@ -1,1 +1,1 @@
-- Fix orbiting problem
+- attribute configuration in website
