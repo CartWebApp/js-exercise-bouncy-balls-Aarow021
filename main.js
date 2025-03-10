@@ -9,11 +9,17 @@ let height = canvas.height = pageWrapper.clientHeight;
 
 let balls = [];
 
-let friction = .001;
-let gravity = .1;
+//configurable settings
+let friction = 0;
+let gravity = 0;
+let enableAbsorb = false;
+let absorbThresh = 0;   //min combined velocity to absorb
+let minSize = 15;
+let maxSize = 30;
+let maxSpeed = .5;
+let ballCount = 100;
 
-// function to generate random number
-
+//function to generate random number
 function random(min, max) {
   const num = Math.floor(Math.random() * (max - min + 1)) + min;
   return num;
@@ -194,7 +200,7 @@ class Ball {
         //collision condition
         if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
           //If the velocity between the two are great enough
-          if (Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > 10) {
+          if (enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > absorbThresh) {
             this.fuse(balls[j])
           } else {
             this.bounce(balls[j])
@@ -278,16 +284,16 @@ function clickHandler(e) {
 }
 
 //populates screen with balls
-function addBalls(num, size, x, y) {
+function addBalls(num, size, x, y, vx, vy) {
   for (let i = 0; i < num; i++) {
-    let radius = size || random(10,30);
+    let radius = size || random(minSize, maxSize);
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
-      x || random(0 + radius,width - radius),
-      y || random(0 + radius,height - radius),
-      random(-7,7),
-      random(-7,7),
+      x ?? random(0 + radius,width - radius),
+      y ?? random(0 + radius,height - radius),
+      vx ?? random(-maxSpeed,maxSpeed),
+      vy ?? random(-maxSpeed,maxSpeed),
       [random(0,255), random(0,255), random(0,255)],
       radius
     );
@@ -305,8 +311,8 @@ window.addEventListener('resize', () => {
 //adds click event
 window.addEventListener('click', clickHandler)
 
-//initiates the balls
-addBalls(100);
+//generates the balls
+addBalls(ballCount);
 
 //initiates the loop
 loop()
