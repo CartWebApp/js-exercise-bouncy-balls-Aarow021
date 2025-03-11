@@ -96,6 +96,40 @@
               <label for="max-speed-input">Max Speed</label>
               <input type="number" id="max-speed-input" min="0" value=".5"  step=".1">
             </div>
+            <hr>
+            <h3>Click Settings</h3>
+            <div class="settings-row dropdown-row">
+              <label for="max-speed-input">Mouse 1</label>
+              <select id="mouse1-input">
+                <option value="none">None</option>
+                <option value="generate">Generate</option>
+                <option value="split" selected="selected">Split</option>
+              </select>
+            </div>
+            <div class="settings-row dropdown-row">
+              <label for="max-speed-input">Mouse 2</label>
+              <select id="mouse2-input">
+                <option value="none">None</option>
+                <option value="generate" selected="selected">Generate</option>
+                <option value="split">Split</option>
+              </select>
+            </div>
+            <div class="settings-row input-row">
+              <label for="generate-count-input">Generate Count</label>
+              <input type="number" id="generate-count-input" min="0" value="1"  step="1">
+            </div>
+            <div class="settings-row input-row">
+              <label for="generate-speed-input">Generate Speed</label>
+              <input type="number" id="generate-speed-input" value="1"  step=".1">
+            </div>
+            <div class="settings-row input-row">
+              <label for="split-count-input">Split Count</label>
+              <input type="number" id="split-count-input" min="1" value="2"  step="1">
+            </div>
+            <div class="settings-row input-row">
+              <label for="split-speed-input">Split Speed</label>
+              <input type="number" id="split-speed-input" value="1"  step=".01">
+            </div>
           </div>
         </div>
       </section>
