@@ -35,7 +35,9 @@ let splitCount = 2;
 let splitSpeed = 1;
 let pushStrength = 1.5;
 let pushRadius = 200;
+let pushMode = 'default';
 let pushType = 'linear';
+let pullMode = 'default';
 let pullStrength = 1.5;
 let pullRadius = 200;
 let pullType = 'linear';
@@ -443,19 +445,23 @@ function updateMenu() {
     hide(document.querySelector('.settings-row:has(#split-speed-input)'));
   }
   if (mouse1 === 'push' || mouse2 === 'push') {
+    show(document.querySelector('.settings-row:has(#push-mode-input)'));
     show(document.querySelector('.settings-row:has(#push-type-input)'));
     show(document.querySelector('.settings-row:has(#push-strength-input)'));
     show(document.querySelector('.settings-row:has(#push-radius-input)'));
   } else {
+    hide(document.querySelector('.settings-row:has(#push-mode-input)'));
     hide(document.querySelector('.settings-row:has(#push-type-input)'));
     hide(document.querySelector('.settings-row:has(#push-strength-input)'));
     hide(document.querySelector('.settings-row:has(#push-radius-input)'));
   }
   if (mouse1 === 'pull' || mouse2 === 'pull') {
+    show(document.querySelector('.settings-row:has(#pull-mode-input)'));
     show(document.querySelector('.settings-row:has(#pull-type-input)'));
     show(document.querySelector('.settings-row:has(#pull-strength-input)'));
     show(document.querySelector('.settings-row:has(#pull-radius-input)'));
   } else {
+    hide(document.querySelector('.settings-row:has(#pull-mode-input)'));
     hide(document.querySelector('.settings-row:has(#pull-type-input)'));
     hide(document.querySelector('.settings-row:has(#pull-strength-input)'));
     hide(document.querySelector('.settings-row:has(#pull-radius-input)'));
@@ -500,12 +506,16 @@ function inputHandler(e) {
     splitCount = Number(input.value);
   } else if (id === 'split-speed-input') {
     splitSpeed = Number(input.value);
+  } else if (id === 'push-mode-input') {
+    pushMode = String(input.value);
   } else if (id === 'push-type-input') {
     pushType = String(input.value);
   } else if (id === 'push-strength-input') {
     pushStrength = Number(input.value);
   } else if (id === 'push-radius-input') {
     pushRadius = Number(input.value);
+  } else if (id === 'pull-mode-input') {
+    pullMode = String(input.value);
   } else if (id === 'pull-strength-input') {
     pullStrength = Number(input.value);
   } else if (id === 'pull-radius-input') {
@@ -572,6 +582,16 @@ function checkAllCollisions(x, y, radius, action) {
   }
 }
 
+//does an action to every ball that is not colliding with a radius
+function checkAllNonCollisions(x, y, radius, action) {
+  for (let j = 0; j < balls.length; j++) {
+    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
+    if (distance > balls[j].radius + radius) {
+      action(balls[j], distance);
+    }
+  }
+}
+
 //does an action to the first ball that is colliding with a radius
 function checkOneCollision(x, y, radius, action) {
   for (let j = 0; j < balls.length; j++) {
@@ -595,11 +615,9 @@ function applyForce(object, forceX, forceY) {
   object.setVelocity(object.velX - forceX, object.velY - forceY)
 }
 
-//applies force to all balls in a radius
-function forceBalls(x, y, radius, strength, mode, type='linear') {
-  checkAllCollisions(x, y, radius, (ball, dist) => {
-
-    let forceX, forceY;
+//applies a force to a ball based on its distance to a point
+function generateForce(ball, type, mode, dist, x, y, strength) {
+  let forceX, forceY;
     let xSign = (x - ball.x > 0) ? 1: -1;
     let YSign = (y - ball.y > 0) ? 1: -1;
 
@@ -632,16 +650,19 @@ function forceBalls(x, y, radius, strength, mode, type='linear') {
     }
 
     applyForce(ball, forceX, forceY);
-  })
 }
 
-//attracts balls to a point
-function pullBalls(x, y, radius, strength) {
-  checkAllCollisions(x, y, radius, (ball) => {
-    let forceX = (strength / 1000) * (x - ball.x)
-    let forceY = (strength / 1000) * (y - ball.y)
-    applyForce(ball, -forceX, -forceY);
-  })
+//applies force to all balls in a radius
+function forceBalls(x, y, radius, strength, mode, type='linear') {
+  if (pushMode === 'default') {
+    checkAllCollisions(x, y, radius, (ball, dist) => {
+      generateForce(ball, type, mode, dist, x, y, strength)
+    })
+  } else if (pushMode === 'inverted') {
+    checkAllNonCollisions(x, y, radius, (ball, dist) => {
+      generateForce(ball, type, mode, dist, x, y, strength)
+    })
+  }
 }
 
 //attracts balls to a point
