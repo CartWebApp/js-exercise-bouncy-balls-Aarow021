@@ -21,6 +21,14 @@ let maxSize = 30;
 let maxSpeed = .5;
 let ballCount = 100;
 let collision = true;
+//mouse click settings
+let mouse1 = 'split'; //command for left click
+let mouse2 = 'generate'; //command for right click
+let clickGenerateCount = 1;
+let clickGenerateSpeed = 1;
+let splitCount = 2;
+let splitSpeed = 1;
+
 
 //function to generate random number
 function random(min, max) {
@@ -71,6 +79,35 @@ function getComponents(magnitude, angle) {
 //returns the magnitude of a vector
 function getMagnitude([x, y]) {
   return Math.sqrt((x*x) + (y*y))
+}
+//returns the unit of a vector (length of 1)
+function unit(vector) {
+  let dirX = vector.x > 0 ? 1 : -1;
+  let dirY = vector.Y > 0 ? 1 : -1;
+  let magnitude = getMagnitude(vector);
+  let unitX = vector[0] / magnitude;
+  let unitY = vector[0] / magnitude;
+  return { x: unitX, y: unitY, dirX, dirY}
+}
+
+//gets radius from mass and density
+function massToRadius(mass, density) {
+  let area = mass / density
+  let radius = Math.sqrt(area / Math.PI)
+  return radius;
+}
+
+function rotateVector(x, y, degrees, center=[0,0]) {
+  const radians = degrees * Math.PI / 180;
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  const translatedX = x - center[0];
+  const translatedY = y - center[1];
+  const rotatedX = translatedX * cos - translatedY * sin;
+  const rotatedY = translatedX * sin + translatedY * cos;
+  const finalX = rotatedX + center[0];
+  const finalY = rotatedY + center[1];
+  return { x: finalX, y: finalY };
 }
 
 //ball class
@@ -263,9 +300,26 @@ class Ball {
   }
   
   //splits a ball into 2 or more
-  split() {
-    let splits = random(2, 4);
-
+  split(splits) {
+    for (let i = 0; i < splits; i++) {
+      let vectorNorm = unit([this.velX, this.velY]);
+      let newVelocity = rotateVector(
+        vectorNorm.x * splitSpeed,
+        vectorNorm.y * splitSpeed,
+        360 / splits * i
+      )
+      let newSize = massToRadius(this.mass / splits, this.density);
+      addBalls(
+        1,
+        newSize,
+        this.x,
+        this.y,
+        null,
+        newVelocity.x,
+        newVelocity.y
+      );
+    }
+    balls.splice(balls.indexOf(this), 1);
   }
 }
 
@@ -283,29 +337,18 @@ function loop() {
   requestId = requestAnimationFrame(loop);
 }
 
-//handles what happens when the page is clicked
-function clickHandler(e) {
-  let mouseX = e.clientX;
-  let mouseY = e.clientY;
-  for (let j = 0; j < balls.length; j++) {
-    let distance = getDistance([mouseX, mouseY], [balls[j].x, balls[j].y])
-    if (distance < this.radius) {
-      //Split
-    }
-  }
-}
-
 //populates screen with balls
-function addBalls(num, size, x, y, vx, vy) {
+function addBalls(num, size, x, y, speed, vx, vy) {
   for (let i = 0; i < num; i++) {
     let radius = size || random(minSize, maxSize);
+    let speed = clickGenerateSpeed ?? maxSpeed
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
       x ?? random(0 + radius,width - radius),
       y ?? random(0 + radius,height - radius),
-      vx ?? random(-maxSpeed,maxSpeed),
-      vy ?? random(-maxSpeed,maxSpeed),
+      vx ?? random(-speed * 100,speed * 100) / 100,
+      vy ?? random(-speed * 100,speed * 100) / 100,
       [random(0,255), random(0,255), random(0,255)],
       radius
     );
@@ -347,6 +390,36 @@ function buttonHandler(e) {
   }
 }
 
+//updates the elements in menu; some may need to be hidden, others shown
+function updateMenu() {
+  if (enableAbsorb === true) {
+    show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+  }
+  if (collision === true) {
+    show(document.querySelector('.settings-row:has(#absorption-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#absorption-input)'));
+    hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+  }
+
+  if (mouse1 === 'generate' || mouse2 === 'generate') {
+    show(document.querySelector('.settings-row:has(#generate-count-input)'));
+    show(document.querySelector('.settings-row:has(#generate-speed-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#generate-count-input)'));
+    hide(document.querySelector('.settings-row:has(#generate-speed-input)'));
+  }
+  if (mouse1 === 'split' || mouse2 === 'split') {
+    show(document.querySelector('.settings-row:has(#split-count-input)'));
+    show(document.querySelector('.settings-row:has(#split-speed-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#split-count-input)'));
+    hide(document.querySelector('.settings-row:has(#split-speed-input)'));
+  }
+}
+
 //sets variables to values of inputs
 function inputHandler(e) {
   let input = e.target;
@@ -357,11 +430,6 @@ function inputHandler(e) {
     friction = Number(input.value);
   } else if (id === 'absorption-input') {
     enableAbsorb = Boolean(input.checked);
-    if (enableAbsorb === true) {
-      show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-    } else {
-      hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-    }
   } else if (id === 'absorption-threshold-input') {
     absorbThresh = Number(input.value);
   } else if (id === 'ballcount-input') {
@@ -374,16 +442,20 @@ function inputHandler(e) {
     maxSpeed = Number(input.value);
   } else if (id === 'collision-input') {
     collision = Boolean(input.checked);
-    if (collision === true) {
-      show(document.querySelector('.settings-row:has(#absorption-input)'));
-      if (enableAbsorb === true) {
-        show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-      }
-    } else {
-      hide(document.querySelector('.settings-row:has(#absorption-input)'));
-      hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-    }
+  } else if (id === 'mouse1-input') {
+    mouse1 = String(input.value);
+  } else if (id === 'mouse2-input') {
+    mouse2 = String(input.value);
+  } else if (id === 'generate-count-input') {
+    clickGenerateCount = Number(input.value);
+  } else if (id === 'generate-speed-input') {
+    clickGenerateSpeed = Number(input.value);
+  } else if (id === 'split-count-input') {
+    splitCount = Number(input.value);
+  } else if (id === 'split-speed-input') {
+    splitSpeed = Number(input.value);
   }
+  updateMenu()
 }
 
 //sets up the event listeners
@@ -403,7 +475,7 @@ function addEventListeners() {
   })
 
   //input events
-  document.querySelectorAll('input').forEach(input => {
+  document.querySelectorAll('input, select').forEach(input => {
     input.addEventListener('input', inputHandler);
   })
 
@@ -419,12 +491,45 @@ function addEventListeners() {
   })
   
   //adds click event
-  canvas.addEventListener('click', clickHandler)
+  canvas.addEventListener('mousedown', clickHandler)
+
+  //disables right-click menu on canvas
+  canvas.addEventListener("contextmenu", e => {
+    e.preventDefault();
+  }, false);
+}
+
+//handles what happens when the page is clicked
+function clickHandler(e) {
+  e.preventDefault();
+  let mouseX = e.clientX;
+  let mouseY = e.clientY;
+  let command;
+  if (e.button === 0) { //left mouse
+    command = mouse1;
+  } else if (e.button === 2) { //right mouse
+    command = mouse2;
+  }
+
+  if (command === 'generate') {
+    addBalls(clickGenerateCount, null, mouseX, mouseY)
+  } else if (command === 'split') {
+    for (let j = 0; j < balls.length; j++) {
+      let distance = getDistance([mouseX, mouseY], [balls[j].x, balls[j].y])
+      if (distance < balls[j].radius) {
+        balls[j].split(splitCount)
+        break;
+      }
+    }
+  }
 }
 
 
+//=========THINGS RUN HERE=========//
 
 addEventListeners();
+
+updateMenu()
 
 //generates the balls
 addBalls(ballCount);
