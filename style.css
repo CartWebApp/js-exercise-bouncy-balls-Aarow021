@@ -488,3 +488,15 @@ input[type=checkbox]:hover {
     height: 60%;
   }
 }
+
+@media screen and (max-height: 420px) and (min-width: 700px) {
+  #settings {
+    transform: translate(-50%);
+    height: 80%;
+  }
+
+  nav {
+    top: -16px;
+    transform: scale(.75);
+  }
+}

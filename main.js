@@ -82,12 +82,12 @@ function getMagnitude([x, y]) {
 }
 //returns the unit of a vector (length of 1)
 function unit(vector) {
-  let dirX = vector.x > 0 ? 1 : -1;
-  let dirY = vector.Y > 0 ? 1 : -1;
+  if (vector[0] === 0) vector[0] = 1
+  if (vector[1] === 0) vector[1] = 1
   let magnitude = getMagnitude(vector);
   let unitX = vector[0] / magnitude;
   let unitY = vector[0] / magnitude;
-  return { x: unitX, y: unitY, dirX, dirY}
+  return { x: unitX, y: unitY}
 }
 
 //gets radius from mass and density
@@ -196,7 +196,7 @@ class Ball {
   //fuses this ball with another. The largest one is kept
   fuse(ball2) {
     let biggerBall = ball2.mass > this.mass ? ball2 : this;
-    let smallerBall = ball2.mass < this.mass ? ball2 : this;
+    let smallerBall = ball2.mass <= this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
     biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
@@ -301,12 +301,12 @@ class Ball {
   
   //splits a ball into 2 or more
   split(splits) {
+    let randomDeg = random(0, 360);
     for (let i = 0; i < splits; i++) {
-      let vectorNorm = unit([this.velX, this.velY]);
       let newVelocity = rotateVector(
-        vectorNorm.x * splitSpeed,
-        vectorNorm.y * splitSpeed,
-        360 / splits * i
+        1 * splitSpeed,
+        1 * splitSpeed,
+        360 / splits * i + randomDeg
       )
       let newSize = massToRadius(this.mass / splits, this.density);
       addBalls(
@@ -341,14 +341,14 @@ function loop() {
 function addBalls(num, size, x, y, speed, vx, vy) {
   for (let i = 0; i < num; i++) {
     let radius = size || random(minSize, maxSize);
-    let speed = clickGenerateSpeed ?? maxSpeed
+    let newSpeed = speed ?? maxSpeed
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
       x ?? random(0 + radius,width - radius),
       y ?? random(0 + radius,height - radius),
-      vx ?? random(-speed * 100,speed * 100) / 100,
-      vy ?? random(-speed * 100,speed * 100) / 100,
+      vx ?? random(-newSpeed * 100,newSpeed * 100) / 100,
+      vy ?? random(-newSpeed * 100,newSpeed * 100) / 100,
       [random(0,255), random(0,255), random(0,255)],
       radius
     );
@@ -512,7 +512,7 @@ function clickHandler(e) {
   }
 
   if (command === 'generate') {
-    addBalls(clickGenerateCount, null, mouseX, mouseY)
+    addBalls(clickGenerateCount, null, mouseX, mouseY, clickGenerateSpeed)
   } else if (command === 'split') {
     for (let j = 0; j < balls.length; j++) {
       let distance = getDistance([mouseX, mouseY], [balls[j].x, balls[j].y])
