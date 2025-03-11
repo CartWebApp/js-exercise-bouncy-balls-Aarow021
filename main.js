@@ -20,11 +20,20 @@ let minSize = 15;
 let maxSize = 30;
 let maxSpeed = .5;
 let ballCount = 100;
+let collision = true;
 
 //function to generate random number
 function random(min, max) {
   const num = Math.floor(Math.random() * (max - min + 1)) + min;
   return num;
+}
+
+function hide(element) {
+  element.classList.add('hidden');
+}
+
+function show(element) {
+  element.classList.remove('hidden');
 }
 
 //gives the distance between 2 points
@@ -195,6 +204,7 @@ class Ball {
 
   //handles ball collision checking and actions
   collisionDetect() {
+    if (!collision) { return }
     for (let j = 0; j < balls.length; j++) {
       if (!(this === balls[j])) {
         const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
@@ -304,17 +314,18 @@ function addBalls(num, size, x, y, vx, vy) {
   }    
 }
 
+//pauses the animation
 function stopCanvas() {
   playing = false;
   cancelAnimationFrame(requestId);
 }
 
+//resumes animation
 function startCanvas() {
   if (playing) { return }
   playing = true;
   requestAnimationFrame(loop);
 }
-
 
 //handles every button press
 function buttonHandler(e) {
@@ -336,19 +347,84 @@ function buttonHandler(e) {
   }
 }
 
-//adds button handler to each button
-document.querySelectorAll('button').forEach(btn => {
-  btn.addEventListener('click', buttonHandler);
-})
+//sets variables to values of inputs
+function inputHandler(e) {
+  let input = e.target;
+  let id = input.id;
+  if (id === 'gravity-input' || id === 'gravity-input-slider') {
+    gravity = Number(input.value);
+  } else if (id === 'friction-input' || id === 'friction-input-slider') {
+    friction = Number(input.value);
+  } else if (id === 'absorption-input') {
+    enableAbsorb = Boolean(input.checked);
+    if (enableAbsorb === true) {
+      show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+    } else {
+      hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+    }
+  } else if (id === 'absorption-threshold-input') {
+    absorbThresh = Number(input.value);
+  } else if (id === 'ballcount-input') {
+    ballCount = Number(input.value);
+  } else if (id === 'min-size-input') {
+    minSize = Number(input.value);
+  } else if (id === 'max-size-input') {
+    maxSize = Number(input.value);
+  } else if (id === 'max-speed-input') {
+    maxSpeed = Number(input.value);
+  } else if (id === 'collision-input') {
+    collision = Boolean(input.checked);
+    if (collision === true) {
+      show(document.querySelector('.settings-row:has(#absorption-input)'));
+      if (enableAbsorb === true) {
+        show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+      }
+    } else {
+      hide(document.querySelector('.settings-row:has(#absorption-input)'));
+      hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
+    }
+  }
+}
 
-//enables canvas to respond to screen size changes
-window.addEventListener('resize', () => {
-  width = canvas.width = pageWrapper.clientWidth;
-  height = canvas.height = pageWrapper.clientHeight;
-})
+//sets up the event listeners
+function addEventListeners() {
 
-//adds click event
-window.addEventListener('click', clickHandler)
+  //links sliders and number inputs
+  document.querySelectorAll('.slider-row').forEach(row => {
+    const numInput = row.querySelector('input[type=number]');
+    const slider = row.querySelector('input[type=range]');
+  
+    numInput.addEventListener('input', () => {
+      slider.value = numInput.value;
+    })
+    slider.addEventListener('input', () => {
+      numInput.value = slider.value;
+    })
+  })
+
+  //input events
+  document.querySelectorAll('input').forEach(input => {
+    input.addEventListener('input', inputHandler);
+  })
+
+  //adds button handler to each button
+  document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', buttonHandler);
+  })
+  
+  //enables canvas to respond to screen size changes
+  window.addEventListener('resize', () => {
+    width = canvas.width = pageWrapper.clientWidth;
+    height = canvas.height = pageWrapper.clientHeight;
+  })
+  
+  //adds click event
+  canvas.addEventListener('click', clickHandler)
+}
+
+
+
+addEventListeners();
 
 //generates the balls
 addBalls(ballCount);

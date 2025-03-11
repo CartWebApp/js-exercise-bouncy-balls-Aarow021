@@ -49,8 +49,8 @@
             <div class="settings-row">
               <label for="gravity-input-number">Gravity</label>
               <div class="slider-row">
-                <input type="number" id="gravity-input" value="0">
-                <input type="range" id="gravity-input-slider" min="-1" max="1" step=".05" value="0">
+                <input type="number" id="gravity-input" value="0" step=".001">
+                <input type="range" id="gravity-input-slider" min="-1" max="1" step=".02" value="0">
               </div>
             </div>
             <div class="settings-row">
@@ -61,13 +61,20 @@
               </div>
             </div>
             <div class="settings-row checkbox-row">
+              <label for="collision-input" >Collision</label>
+              <div class="checkbox-container">
+                <input type="checkbox" id="collision-input" checked>
+                <span class="checkmark"></span>
+              </div>
+            </div>
+            <div class="settings-row checkbox-row">
               <label for="absorption-input" >Absorption</label>
               <div class="checkbox-container">
                 <input type="checkbox" id="absorption-input">
                 <span class="checkmark"></span>
               </div>
             </div>
-            <div class="settings-row input-row">
+            <div class="settings-row input-row hidden">
               <label for="absorption-threshold-input">Absorption Threshold</label>
               <input type="number" id="absorption-threshold-input" min="0" value="0">
             </div>
@@ -79,15 +86,15 @@
             </div>
             <div class="settings-row input-row">
               <label for="min-size-input">Min Size</label>
-              <input type="number" id="min-size-input" value="15">
+              <input type="number" id="min-size-input" value="15" step="1">
             </div>
             <div class="settings-row input-row">
               <label for="max-size-input">Max Size</label>
-              <input type="number" id="max-size-input" value="30">
+              <input type="number" id="max-size-input" value="30" step="1">
             </div>
             <div class="settings-row input-row">
-              <label for="max-speed">Max Speed</label>
-              <input type="number" id="max-speed" min="0" value=".5">
+              <label for="max-speed-input">Max Speed</label>
+              <input type="number" id="max-speed-input" min="0" value=".5"  step=".1">
             </div>
           </div>
         </div>
