@@ -10,10 +10,14 @@ let height = canvas.height = pageWrapper.clientHeight;
 let balls = [];
 let requestId;
 let playing = true;
+let mouseX = 0;
+let mouseY = 0;
+let mouseDown = false;
 
 //configurable settings
 let friction = 0;
-let gravity = 0;
+let gravityX = 0;
+let gravityY = 0;
 let enableAbsorb = false;
 let absorbThresh = 0;   //min combined velocity to absorb
 let minSize = 15;
@@ -22,12 +26,19 @@ let maxSpeed = .5;
 let ballCount = 100;
 let collision = true;
 //mouse click settings
-let mouse1 = 'split'; //command for left click
-let mouse2 = 'generate'; //command for right click
+let mouse1 = 'push'; //command for left click
+let mouse2 = 'pull'; //command for right click
 let clickGenerateCount = 1;
 let clickGenerateSpeed = 1;
+let deleteRadius = 1;
 let splitCount = 2;
 let splitSpeed = 1;
+let pushStrength = 1.5;
+let pushRadius = 200;
+let pushType = 'linear';
+let pullStrength = 1.5;
+let pullRadius = 200;
+let pullType = 'linear';
 
 
 //function to generate random number
@@ -36,10 +47,17 @@ function random(min, max) {
   return num;
 }
 
+//waits for a given time
+function sleep(ms) {
+  return new Promise(rs => {setTimeout(rs, ms)})
+}
+
+//hides an element
 function hide(element) {
   element.classList.add('hidden');
 }
 
+//shows an element
 function show(element) {
   element.classList.remove('hidden');
 }
@@ -82,12 +100,12 @@ function getMagnitude([x, y]) {
 }
 //returns the unit of a vector (length of 1)
 function unit(vector) {
-  let dirX = vector.x > 0 ? 1 : -1;
-  let dirY = vector.Y > 0 ? 1 : -1;
+  if (vector[0] === 0) vector[0] = 1
+  if (vector[1] === 0) vector[1] = 1
   let magnitude = getMagnitude(vector);
   let unitX = vector[0] / magnitude;
   let unitY = vector[0] / magnitude;
-  return { x: unitX, y: unitY, dirX, dirY}
+  return { x: unitX, y: unitY}
 }
 
 //gets radius from mass and density
@@ -196,7 +214,7 @@ class Ball {
   //fuses this ball with another. The largest one is kept
   fuse(ball2) {
     let biggerBall = ball2.mass > this.mass ? ball2 : this;
-    let smallerBall = ball2.mass < this.mass ? ball2 : this;
+    let smallerBall = ball2.mass <= this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
     biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
@@ -285,7 +303,8 @@ class Ball {
 
     this.momentumX *= 1 - friction;
     this.momentumY *= 1 - friction;
-    this.momentumY += gravity * this.mass;
+    this.momentumX += gravityX * this.mass;
+    this.momentumY += gravityY * this.mass;
 
     this.calcVelocity();
     if (Math.abs(this.velX) < .01 && friction > 0) {
@@ -301,12 +320,12 @@ class Ball {
   
   //splits a ball into 2 or more
   split(splits) {
+    let randomDeg = random(0, 360);
     for (let i = 0; i < splits; i++) {
-      let vectorNorm = unit([this.velX, this.velY]);
       let newVelocity = rotateVector(
-        vectorNorm.x * splitSpeed,
-        vectorNorm.y * splitSpeed,
-        360 / splits * i
+        1 * splitSpeed,
+        1 * splitSpeed,
+        360 / splits * i + randomDeg
       )
       let newSize = massToRadius(this.mass / splits, this.density);
       addBalls(
@@ -341,14 +360,14 @@ function loop() {
 function addBalls(num, size, x, y, speed, vx, vy) {
   for (let i = 0; i < num; i++) {
     let radius = size || random(minSize, maxSize);
-    let speed = clickGenerateSpeed ?? maxSpeed
+    let newSpeed = speed ?? maxSpeed
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
       x ?? random(0 + radius,width - radius),
       y ?? random(0 + radius,height - radius),
-      vx ?? random(-speed * 100,speed * 100) / 100,
-      vy ?? random(-speed * 100,speed * 100) / 100,
+      vx ?? random(-newSpeed * 100,newSpeed * 100) / 100,
+      vy ?? random(-newSpeed * 100,newSpeed * 100) / 100,
       [random(0,255), random(0,255), random(0,255)],
       radius
     );
@@ -411,6 +430,11 @@ function updateMenu() {
     hide(document.querySelector('.settings-row:has(#generate-count-input)'));
     hide(document.querySelector('.settings-row:has(#generate-speed-input)'));
   }
+  if (mouse1 === 'delete' || mouse2 === 'delete') {
+    show(document.querySelector('.settings-row:has(#delete-radius-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#delete-radius-input)'));
+  }
   if (mouse1 === 'split' || mouse2 === 'split') {
     show(document.querySelector('.settings-row:has(#split-count-input)'));
     show(document.querySelector('.settings-row:has(#split-speed-input)'));
@@ -418,14 +442,34 @@ function updateMenu() {
     hide(document.querySelector('.settings-row:has(#split-count-input)'));
     hide(document.querySelector('.settings-row:has(#split-speed-input)'));
   }
+  if (mouse1 === 'push' || mouse2 === 'push') {
+    show(document.querySelector('.settings-row:has(#push-type-input)'));
+    show(document.querySelector('.settings-row:has(#push-strength-input)'));
+    show(document.querySelector('.settings-row:has(#push-radius-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#push-type-input)'));
+    hide(document.querySelector('.settings-row:has(#push-strength-input)'));
+    hide(document.querySelector('.settings-row:has(#push-radius-input)'));
+  }
+  if (mouse1 === 'pull' || mouse2 === 'pull') {
+    show(document.querySelector('.settings-row:has(#pull-type-input)'));
+    show(document.querySelector('.settings-row:has(#pull-strength-input)'));
+    show(document.querySelector('.settings-row:has(#pull-radius-input)'));
+  } else {
+    hide(document.querySelector('.settings-row:has(#pull-type-input)'));
+    hide(document.querySelector('.settings-row:has(#pull-strength-input)'));
+    hide(document.querySelector('.settings-row:has(#pull-radius-input)'));
+  }
 }
 
 //sets variables to values of inputs
 function inputHandler(e) {
   let input = e.target;
   let id = input.id;
-  if (id === 'gravity-input' || id === 'gravity-input-slider') {
-    gravity = Number(input.value);
+  if (id === 'gravity-x-input' || id === 'gravity-x-input-slider') {
+    gravityX = Number(input.value);
+  } else if (id === 'gravity-y-input' || id === 'gravity-y-input-slider') {
+    gravityY = Number(input.value);
   } else if (id === 'friction-input' || id === 'friction-input-slider') {
     friction = Number(input.value);
   } else if (id === 'absorption-input') {
@@ -450,10 +494,24 @@ function inputHandler(e) {
     clickGenerateCount = Number(input.value);
   } else if (id === 'generate-speed-input') {
     clickGenerateSpeed = Number(input.value);
+  } else if (id === 'delete-radius-input') {
+    deleteRadius = Number(input.value);
   } else if (id === 'split-count-input') {
     splitCount = Number(input.value);
   } else if (id === 'split-speed-input') {
     splitSpeed = Number(input.value);
+  } else if (id === 'push-type-input') {
+    pushType = String(input.value);
+  } else if (id === 'push-strength-input') {
+    pushStrength = Number(input.value);
+  } else if (id === 'push-radius-input') {
+    pushRadius = Number(input.value);
+  } else if (id === 'pull-strength-input') {
+    pullStrength = Number(input.value);
+  } else if (id === 'pull-radius-input') {
+    pullRadius = Number(input.value);
+  } else if (id === 'pull-type-input') {
+    pullType = String(input.value);
   }
   updateMenu()
 }
@@ -491,7 +549,12 @@ function addEventListeners() {
   })
   
   //adds click event
-  canvas.addEventListener('mousedown', clickHandler)
+  canvas.addEventListener('mousedown', clickHandler);
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+  window.addEventListener('mouseup', () => mouseDown = false);
 
   //disables right-click menu on canvas
   canvas.addEventListener("contextmenu", e => {
@@ -499,11 +562,102 @@ function addEventListeners() {
   }, false);
 }
 
+//does an action to every ball that is colliding with a radius
+function checkAllCollisions(x, y, radius, action) {
+  for (let j = 0; j < balls.length; j++) {
+    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
+    if (distance < balls[j].radius + radius) {
+      action(balls[j], distance);
+    }
+  }
+}
+
+//does an action to the first ball that is colliding with a radius
+function checkOneCollision(x, y, radius, action) {
+  for (let j = 0; j < balls.length; j++) {
+    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
+    if (distance < balls[j].radius + radius) {
+      action(balls[j], distance);
+      return;
+    }
+  }
+}
+
+//Deletes balls within a radius
+function deleteBalls(x, y, radius) {
+  checkAllCollisions(x, y, radius, (ball) => {
+    balls.splice(balls.indexOf(ball), 1);
+  })
+}
+
+//adds to velocity of an object
+function applyForce(object, forceX, forceY) {
+  object.setVelocity(object.velX - forceX, object.velY - forceY)
+}
+
+//applies force to all balls in a radius
+function forceBalls(x, y, radius, strength, mode, type='linear') {
+  checkAllCollisions(x, y, radius, (ball, dist) => {
+
+    let forceX, forceY;
+    let xSign = (x - ball.x > 0) ? 1: -1;
+    let YSign = (y - ball.y > 0) ? 1: -1;
+
+    if (type === 'test') {
+      forceX = (strength * 10) / (x - ball.x) / (dist * dist);
+      forceY = (strength * 10) / (y - ball.y) / (dist * dist);
+    } else if (type === 'linear') {
+      forceX = (strength / 1000) * (x - ball.x);
+      forceY = (strength / 1000) * (y - ball.y);
+    } else if (type === 'constant') {
+      forceX = (strength / 10) * (x - ball.x) / dist;
+      forceY = (strength / 10) * (y - ball.y) / dist;
+    } else if (type === 'cross1') {
+      forceX = (strength / 10) / (x - ball.x);
+      forceY = (strength / 10) / (y - ball.y);
+    } else if (type === 'cross2') {
+      forceX = (strength / 100) * Math.log10(dist) * xSign;
+      forceY = (strength / 100) * Math.log10(dist) * YSign;
+    } else if(type === 'cross3') {
+      forceX = (strength / 100) / (x - ball.x) * dist;
+      forceY = (strength / 100) / (y - ball.y) * dist;
+    } else if (type === 'cross4') {
+      forceX = (strength * 10) / (x - ball.x) / dist;
+      forceY = (strength * 10) / (y - ball.y) / dist;
+    }
+
+    if (mode === 'push') {
+      forceX = -forceX;
+      forceY = -forceY;
+    }
+
+    applyForce(ball, forceX, forceY);
+  })
+}
+
+//attracts balls to a point
+function pullBalls(x, y, radius, strength) {
+  checkAllCollisions(x, y, radius, (ball) => {
+    let forceX = (strength / 1000) * (x - ball.x)
+    let forceY = (strength / 1000) * (y - ball.y)
+    applyForce(ball, -forceX, -forceY);
+  })
+}
+
+//attracts balls to a point
+function pullBalls(x, y, radius, strength, type) {
+  forceBalls(x, y, radius, strength, 'push', type);
+}
+
+//pushes balls away from a point
+function pushBalls(x, y, radius, strength, type) {
+  forceBalls(x, y, radius, strength, 'pull', type);
+}
+
 //handles what happens when the page is clicked
-function clickHandler(e) {
+async function clickHandler(e) {
   e.preventDefault();
-  let mouseX = e.clientX;
-  let mouseY = e.clientY;
+  mouseDown = true;
   let command;
   if (e.button === 0) { //left mouse
     command = mouse1;
@@ -512,16 +666,27 @@ function clickHandler(e) {
   }
 
   if (command === 'generate') {
-    addBalls(clickGenerateCount, null, mouseX, mouseY)
-  } else if (command === 'split') {
-    for (let j = 0; j < balls.length; j++) {
-      let distance = getDistance([mouseX, mouseY], [balls[j].x, balls[j].y])
-      if (distance < balls[j].radius) {
-        balls[j].split(splitCount)
-        break;
-      }
+    addBalls(clickGenerateCount, null, mouseX, mouseY, clickGenerateSpeed)
+  } else if (command === 'delete') {
+    while (mouseDown) {
+      deleteBalls(mouseX, mouseY, deleteRadius);
+      await sleep(5);
     }
-  }
+  } else if (command === 'split') {
+    checkOneCollision(mouseX, mouseY, 1, (ball) => {
+      ball.split(splitCount);
+    }) 
+  } else if (command === 'push') {
+    while (mouseDown) {
+      pushBalls(mouseX, mouseY, pushRadius, pushStrength, pushType);
+      await sleep(20);
+    }
+  } else if (command === 'pull') {
+    while (mouseDown) {
+      pullBalls(mouseX, mouseY, pullRadius, pullStrength, pullType);
+      await sleep(20);
+    }
+  } 
 }
 
 
