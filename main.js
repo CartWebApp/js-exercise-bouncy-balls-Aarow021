@@ -12,7 +12,9 @@ let requestId;
 let playing = true;
 let mouseX = 0;
 let mouseY = 0;
-let mouseDown = false;
+let mouse1Down = false;
+let mouse2Down = false;
+let touchesList = [];
 
 //configurable settings
 let friction = 0;
@@ -20,12 +22,13 @@ let gravityX = 0;
 let gravityY = 0;
 let enableAbsorb = false;
 let absorbThresh = 0;   //min combined velocity to absorb
-let minSize = 15;
-let maxSize = 30;
+let minSize = 10;
+let maxSize = 20;
 let maxSpeed = .5;
 let ballCount = 100;
 let collision = true;
 //mouse click settings
+let abilities = {};
 let mouse1 = 'push'; //command for left click
 let mouse2 = 'pull'; //command for right click
 let clickGenerateCount = 1;
@@ -117,6 +120,7 @@ function massToRadius(mass, density) {
   return radius;
 }
 
+//rotates a vector/point about another point by n degrees
 function rotateVector(x, y, degrees, center=[0,0]) {
   const radians = degrees * Math.PI / 180;
   const cos = Math.cos(radians);
@@ -128,6 +132,15 @@ function rotateVector(x, y, degrees, center=[0,0]) {
   const finalX = rotatedX + center[0];
   const finalY = rotatedY + center[1];
   return { x: finalX, y: finalY };
+}
+
+//base class for abilities
+class Ability {
+  constructor(name, repeats, interval=20) {
+    this.name = name;
+    this.repeats = repeats;
+    this.interval = interval;
+  }
 }
 
 //ball class
@@ -558,13 +571,23 @@ function addEventListeners() {
     height = canvas.height = pageWrapper.clientHeight;
   })
   
-  //adds click event
+  //adds click events
   canvas.addEventListener('mousedown', clickHandler);
   window.addEventListener('mousemove', (e) => {
     mouseX = e.clientX;
     mouseY = e.clientY;
   });
-  window.addEventListener('mouseup', () => mouseDown = false);
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {mouse1Down = false}
+    else if (e.button === 2) {mouse2Down = false}
+  });
+
+  //add touch events
+  canvas.addEventListener('touchstart', touchHandler);
+  canvas.addEventListener('touchend', touchEndHandler);
+  canvas.addEventListener('touchcancel', touchCancelHandler);
+  canvas.addEventListener('touchmove', touchMoveHandler);
+
 
   //disables right-click menu on canvas
   canvas.addEventListener("contextmenu", e => {
@@ -572,11 +595,24 @@ function addEventListeners() {
   }, false);
 }
 
-//does an action to every ball that is colliding with a radius
-function checkAllCollisions(x, y, radius, action) {
+//does an action to every ball that meets a given condition
+function checkAllCollisions(x, y, radius, action, condition) {
+  if (!condition) {
+    condition = (ball, dist) => dist < ball.radius + radius;
+  }
   for (let j = 0; j < balls.length; j++) {
     let distance = getDistance([x, y], [balls[j].x, balls[j].y])
-    if (distance < balls[j].radius + radius) {
+    if (condition(balls[j], distance)) {
+      action(balls[j], distance);
+    }
+  }
+}
+
+//does an action to every ball that is not colliding with a radius
+function checkAllNonCollisions(x, y, radius, action) {
+  for (let j = 0; j < balls.length; j++) {
+    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
+    if (distance > balls[j].radius + radius) {
       action(balls[j], distance);
     }
   }
@@ -603,7 +639,7 @@ function checkOneCollision(x, y, radius, action) {
   }
 }
 
-//Deletes balls within a radius
+//deletes balls within a radius
 function deleteBalls(x, y, radius) {
   checkAllCollisions(x, y, radius, (ball) => {
     balls.splice(balls.indexOf(ball), 1);
@@ -622,8 +658,8 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
     let YSign = (y - ball.y > 0) ? 1: -1;
 
     if (type === 'test') {
-      forceX = (strength * 10) / (x - ball.x) / (dist * dist);
-      forceY = (strength * 10) / (y - ball.y) / (dist * dist);
+      forceX = (strength * 100) / (x - ball.x) / (dist * dist);
+      forceY = (strength * 100) / (y - ball.y) / (dist * dist);
     } else if (type === 'linear') {
       forceX = (strength / 1000) * (x - ball.x);
       forceY = (strength / 1000) * (y - ball.y);
@@ -637,14 +673,14 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
       forceX = (strength / 100) * Math.log10(dist) * xSign;
       forceY = (strength / 100) * Math.log10(dist) * YSign;
     } else if(type === 'cross3') {
-      forceX = (strength / 100) / (x - ball.x) * dist;
-      forceY = (strength / 100) / (y - ball.y) * dist;
+      forceX = (strength / 500) / (x - ball.x) * dist;
+      forceY = (strength / 500) / (y - ball.y) * dist;
     } else if (type === 'cross4') {
       forceX = (strength * 10) / (x - ball.x) / dist;
       forceY = (strength * 10) / (y - ball.y) / dist;
     }
 
-    if (mode === 'push') {
+    if (mode === 'pull') {
       forceX = -forceX;
       forceY = -forceY;
     }
@@ -654,11 +690,19 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
 
 //applies force to all balls in a radius
 function forceBalls(x, y, radius, strength, mode, type='linear') {
-  if (pushMode === 'default') {
+  if (mode === 'push' && pushMode === 'default') {
     checkAllCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (pushMode === 'inverted') {
+  } else if (mode === 'push' && pushMode === 'inverted') {
+    checkAllNonCollisions(x, y, radius, (ball, dist) => {
+      generateForce(ball, type, mode, dist, x, y, strength)
+    })
+  } else if (mode === 'pull' && pullMode === 'default') {
+    checkAllCollisions(x, y, radius, (ball, dist) => {
+      generateForce(ball, type, mode, dist, x, y, strength)
+    })
+  } else if (mode === 'pull' && pullMode === 'inverted') {
     checkAllNonCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
@@ -667,58 +711,152 @@ function forceBalls(x, y, radius, strength, mode, type='linear') {
 
 //attracts balls to a point
 function pullBalls(x, y, radius, strength, type) {
-  forceBalls(x, y, radius, strength, 'push', type);
+  forceBalls(x, y, radius, strength, 'pull', type);
 }
 
 //pushes balls away from a point
 function pushBalls(x, y, radius, strength, type) {
-  forceBalls(x, y, radius, strength, 'pull', type);
+  forceBalls(x, y, radius, strength, 'push', type);
 }
 
-//handles what happens when the page is clicked
-async function clickHandler(e) {
-  e.preventDefault();
-  mouseDown = true;
-  let command;
-  if (e.button === 0) { //left mouse
-    command = mouse1;
-  } else if (e.button === 2) { //right mouse
-    command = mouse2;
-  }
-
-  if (command === 'generate') {
-    addBalls(clickGenerateCount, null, mouseX, mouseY, clickGenerateSpeed)
-  } else if (command === 'delete') {
-    while (mouseDown) {
-      deleteBalls(mouseX, mouseY, deleteRadius);
-      await sleep(5);
-    }
-  } else if (command === 'split') {
-    checkOneCollision(mouseX, mouseY, 1, (ball) => {
+//uses an ability at a coordinate
+function useAbility(ability, [x, y]) {
+  if (ability === 'generate') {
+    addBalls(clickGenerateCount, null, x, y, clickGenerateSpeed)
+  } else if (ability === 'delete') {
+    deleteBalls(x, y, deleteRadius);
+  } else if (ability === 'split') {
+    checkOneCollision(x, y, 1, (ball) => {
       ball.split(splitCount);
     }) 
-  } else if (command === 'push') {
-    while (mouseDown) {
-      pushBalls(mouseX, mouseY, pushRadius, pushStrength, pushType);
-      await sleep(20);
-    }
-  } else if (command === 'pull') {
-    while (mouseDown) {
-      pullBalls(mouseX, mouseY, pullRadius, pullStrength, pullType);
-      await sleep(20);
-    }
+  } else if (ability === 'push') {
+    pushBalls(x, y, pushRadius, pushStrength, pushType);
+  } else if (ability === 'pull') {
+    pullBalls(x, y, pullRadius, pullStrength, pullType);
   } 
 }
 
+//repeats an ability at a given interval until the condition is not met.
+//the x and y positions are dynamically generated by the coordGetter function
+async function repeatAbility(ability, interval, coordGetter, condition) {
+  if (!condition) {
+    condition = () => false;
+  }
+  do {
+    useAbility(ability, coordGetter())
+    await sleep(interval || 1);
+  } while(condition()) ;
+}
+
+//gets the coordinates of a touch
+function getTouchCoords(id) {
+  if (!touchesList[id]) {return false}
+    return [touchesList[id].x, touchesList[id].y]
+}
+
+//handles what happens when the canvas is clicked
+function clickHandler(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  let ability;
+  let isMouseDown;
+
+  if (e.button === 0) { //left mouse
+    ability = abilities[mouse1];
+    mouse1Down = true;
+    isMouseDown = () => mouse1Down;
+  } else if (e.button === 2) { //right mouse
+    ability = abilities[mouse2];
+    mouse2Down = true;
+    isMouseDown = () => mouse2Down;
+  }
+
+  if (ability.repeats) {
+    repeatAbility(ability.name, ability.interval, ()=>[mouseX, mouseY], isMouseDown);
+  } else {
+    useAbility(ability.name, [mouseX, mouseY]);
+  }
+}
+
+//what happens when the canvas is tapped (touchscreen, multitouch)
+function touchHandler(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  let ability = abilities[mouse1];
+  let touches = e.targetTouches;
+  for (const touch of touches) {
+    let id = touch.identifier
+    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY}
+  
+    if (ability.repeats) {
+      repeatAbility(ability.name, ability.interval, ()=>getTouchCoords(id), ()=>touchesList[id]);
+    } else {
+      useAbility(ability.name, [touch.clientX, touch.clientY])
+    }
+  }
+}
+
+//what happens when the touch moves
+function touchMoveHandler(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  let touches = e.changedTouches;
+  for (const touch of touches) {
+    touchesList[touch.identifier].x = touch.clientX;
+    touchesList[touch.identifier].y = touch.clientY;
+  }
+}
+
+//what happens when the touch ends
+function touchEndHandler(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  let touches = e.changedTouches;
+  for (const touch of touches) {
+    let id = touch.identifier;
+    delete touchesList[id];
+
+  }
+}
+
+//what happens when the touch is canceled
+function touchCancelHandler(e) {
+  e.preventDefault();
+  let id = e.touch.identifier;
+  delete touchesList[id];
+}
+
+//generates ability settings
+function initAbilities() {
+  abilities.generate = new Ability('generate', false);
+  abilities.delete = new Ability('delete', true, 5);
+  abilities.split = new Ability('split', false);
+  abilities.push = new Ability('push', true);
+  abilities.pull = new Ability('pull', true);
+}
+
+//changes settings based on if device is mobile
+function setupMobile() {
+  if (window.innerWidth <= 800 && window.innerHeight <= 600) {
+    //do stuff
+  }
+}
+
+//initialises the page. DO NOT RUN MORE THAN ONCE!
+async function init() {
+  initAbilities();
+
+  addEventListeners();
+
+  updateMenu()
+  
+  //generates the balls
+  addBalls(ballCount);
+  
+  //initiates the loop
+  loop()
+}
 
 //=========THINGS RUN HERE=========//
 
-addEventListeners();
-
-updateMenu()
-
-//generates the balls
-addBalls(ballCount);
-
-//initiates the loop
-loop()
+init();

@@ -1,1 +1,7 @@
--mouse push effect
+-Convert settings menu into object
+
+
+
+====IDEAS====
+Grid collision
+orbiting
