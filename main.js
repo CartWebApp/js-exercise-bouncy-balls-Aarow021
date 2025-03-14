@@ -8,27 +8,51 @@ let width = canvas.width = pageWrapper.clientWidth;
 let height = canvas.height = pageWrapper.clientHeight;
 
 let balls = [];
-let requestId;
-let playing = true;
+let requestId; //animationRequest
+let playing = true; //pause/play
 let mouseX = 0;
 let mouseY = 0;
 let mouse1Down = false;
 let mouse2Down = false;
 let touchesList = [];
+let game;
+class Game {
+  constructor() {
+    //configurable settings
+    this.config = {
+      friction: 0,
+      gravityX: 0,
+      gravityY: 0,
+      enableAbsorb: false,
+      absorbThresh: 0, //min combined velocity to absorb
+      minSize: 10,
+      maxSize: 20,
+      maxSpeed: 0.5,
+      ballCount: 100,
+      collision: true,
+      mouse1: 'push',   //command for left click,
+      mouse2: 'pull',   //command for right click,
+      clickGenerateCount: 1,
+      clickGenerateSpeed: 1,
+      deleteRadius: 1,
+      splitCount: 2,
+      splitSpeed: 1,
+      pushMode: 'default',
+      pushStrength: 1.5,
+      pushRadius: 150,
+      pushType: 'linear',
+      pullMode: 'default',
+      pullStrength: 1.5,
+      pullRadius: 200,
+      pullType: 'linear'
+    }
+  }
+}
 
-//configurable settings
-let friction = 0;
-let gravityX = 0;
-let gravityY = 0;
-let enableAbsorb = false;
-let absorbThresh = 0;   //min combined velocity to absorb
-let minSize = 10;
-let maxSize = 20;
-let maxSpeed = .5;
-let ballCount = 100;
-let collision = true;
 //mouse click settings
 let abilities = {};
+let settings = {};
+let currentSettings = {};
 let mouse1 = 'push'; //command for left click
 let mouse2 = 'pull'; //command for right click
 let clickGenerateCount = 1;
@@ -44,6 +68,8 @@ let pullMode = 'default';
 let pullStrength = 1.5;
 let pullRadius = 200;
 let pullType = 'linear';
+
+
 
 
 //function to generate random number
@@ -132,6 +158,78 @@ function rotateVector(x, y, degrees, center=[0,0]) {
   const finalX = rotatedX + center[0];
   const finalY = rotatedY + center[1];
   return { x: finalX, y: finalY };
+}
+
+//base class for inputs
+class Input {
+  constructor(id, type, parentID, displayName, value, dependants) {
+    this.id = id;
+    this.type = type;
+    this.parentID = parentID;
+    this.displayName = displayName;
+    this.value = value;
+    this.dependants = dependants || [];
+    this.hidden = true;
+    this.element;
+  }
+
+  //builds element in parent element
+  spawn() {
+    this.element = this.generateBase();
+    document.getElementById(parentID).appendChild(this.element);
+  }
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.classList.add('settings-row');
+    element.classList.add('hidden');
+    element.classList.add(`${this.type}-row`);
+    return element;
+  }
+  //hides the element
+  hide() {
+    this.getElement().classList.add('hidden');
+  }
+  //shows the element
+  show() {
+    this.getElement().classList.remove('hidden');
+  }
+  //hides if requirements not met, shows if they are met
+  checkRequirements() {
+    if (this.requirements(this)) {
+      this.show();
+    } else {
+      this.hide();
+    }
+  }
+  //gets the DOM element for this input
+  getElement() {
+    return document.getElementById(this.id);
+  }
+}
+
+//class for number inputs
+class numberInput extends Input {
+  constructor(id, parentID, displayName, value=0, min, max, step, requirements) {
+    super(id, 'number', parentID, displayName, value ?? 0, requirements);
+    this.min = min ?? -Infinity;
+    this.max = max ?? -Infinity;
+    this.step = step ?? 1;
+  }
+
+  spawn() {
+    let element = this.generateBase();
+    element.innerHTML = `
+              <label for="${this.id}">${this.displayName}</label>
+              <input type="number" id="${this.id}-input" value="${this.value}"  step="${this.step}">`
+  }
+
+}
+
+//base class for a config object
+//holds a DOM element and an option
+class Config {
+
 }
 
 //base class for abilities
@@ -274,7 +372,7 @@ class Ball {
 
   //handles ball collision checking and actions
   collisionDetect() {
-    if (!collision) { return }
+    if (!game.config.collision) { return }
     for (let j = 0; j < balls.length; j++) {
       if (!(this === balls[j])) {
         const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
@@ -282,7 +380,7 @@ class Ball {
         //collision condition
         if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
           //If the velocity between the two are great enough
-          if (enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > absorbThresh) {
+          if (game.config.enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > game.config.absorbThresh) {
             this.fuse(balls[j])
           } else {
             this.bounce(balls[j])
@@ -315,11 +413,11 @@ class Ball {
     }
 
     this.calcVelocity();
-
+    let friction = game.config.friction;
     this.momentumX *= 1 - friction;
     this.momentumY *= 1 - friction;
-    this.momentumX += gravityX * this.mass;
-    this.momentumY += gravityY * this.mass;
+    this.momentumX += game.config.gravityX * this.mass;
+    this.momentumY += game.config.gravityY * this.mass;
 
     this.calcVelocity();
     if (Math.abs(this.velX) < .01 && friction > 0) {
@@ -374,8 +472,8 @@ function loop() {
 //populates screen with balls
 function addBalls(num, size, x, y, speed, vx, vy) {
   for (let i = 0; i < num; i++) {
-    let radius = size || random(minSize, maxSize);
-    let newSpeed = speed ?? maxSpeed
+    let radius = size || random(game.config.minSize, game.config.maxSize);
+    let newSpeed = speed ?? game.config.maxSpeed
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
@@ -416,7 +514,7 @@ function buttonHandler(e) {
     startCanvas();
   } else if (id === 'reset') {
     balls = [];
-    addBalls(ballCount);
+    addBalls(game.config.ballCount);
   } else if (id === 'settings-toggle') {
     document.getElementById('settings').classList.toggle('hidden');
   } else if (id === 'settings-close') {
@@ -426,12 +524,12 @@ function buttonHandler(e) {
 
 //updates the elements in menu; some may need to be hidden, others shown
 function updateMenu() {
-  if (enableAbsorb === true) {
+  if (game.config.enableAbsorb === true) {
     show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
   } else {
     hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
   }
-  if (collision === true) {
+  if (game.config.collision === true) {
     show(document.querySelector('.settings-row:has(#absorption-input)'));
   } else {
     hide(document.querySelector('.settings-row:has(#absorption-input)'));
@@ -486,55 +584,55 @@ function inputHandler(e) {
   let input = e.target;
   let id = input.id;
   if (id === 'gravity-x-input' || id === 'gravity-x-input-slider') {
-    gravityX = Number(input.value);
+    game.config.gravityX = Number(input.value);
   } else if (id === 'gravity-y-input' || id === 'gravity-y-input-slider') {
-    gravityY = Number(input.value);
+    game.config.gravityY = Number(input.value);
   } else if (id === 'friction-input' || id === 'friction-input-slider') {
-    friction = Number(input.value);
+    game.config.friction = Number(input.value);
   } else if (id === 'absorption-input') {
-    enableAbsorb = Boolean(input.checked);
+    game.config.enableAbsorb = Boolean(input.checked);
   } else if (id === 'absorption-threshold-input') {
-    absorbThresh = Number(input.value);
+    game.config.absorbThresh = Number(input.value);
   } else if (id === 'ballcount-input') {
-    ballCount = Number(input.value);
+    game.config.ballCount = Number(input.value);
   } else if (id === 'min-size-input') {
-    minSize = Number(input.value);
+    game.config.minSize = Number(input.value);
   } else if (id === 'max-size-input') {
-    maxSize = Number(input.value);
+    game.config.maxSize = Number(input.value);
   } else if (id === 'max-speed-input') {
-    maxSpeed = Number(input.value);
+    game.config.maxSpeed = Number(input.value);
   } else if (id === 'collision-input') {
-    collision = Boolean(input.checked);
+    game.config.collision = Boolean(input.checked);
   } else if (id === 'mouse1-input') {
-    mouse1 = String(input.value);
+    game.config.mouse1 = String(input.value);
   } else if (id === 'mouse2-input') {
-    mouse2 = String(input.value);
+    game.config.mouse2 = String(input.value);
   } else if (id === 'generate-count-input') {
-    clickGenerateCount = Number(input.value);
+    game.config.clickGenerateCount = Number(input.value);
   } else if (id === 'generate-speed-input') {
-    clickGenerateSpeed = Number(input.value);
+    game.config.clickGenerateSpeed = Number(input.value);
   } else if (id === 'delete-radius-input') {
-    deleteRadius = Number(input.value);
+    game.config.deleteRadius = Number(input.value);
   } else if (id === 'split-count-input') {
-    splitCount = Number(input.value);
+    game.config.splitCount = Number(input.value);
   } else if (id === 'split-speed-input') {
-    splitSpeed = Number(input.value);
+    game.config.splitSpeed = Number(input.value);
   } else if (id === 'push-mode-input') {
-    pushMode = String(input.value);
+    game.config.pushMode = String(input.value);
   } else if (id === 'push-type-input') {
-    pushType = String(input.value);
+    game.config.pushType = String(input.value);
   } else if (id === 'push-strength-input') {
-    pushStrength = Number(input.value);
+    game.config.pushStrength = Number(input.value);
   } else if (id === 'push-radius-input') {
-    pushRadius = Number(input.value);
+    game.config.pushRadius = Number(input.value);
   } else if (id === 'pull-mode-input') {
-    pullMode = String(input.value);
+    game.config.pullMode = String(input.value);
   } else if (id === 'pull-strength-input') {
-    pullStrength = Number(input.value);
+    game.config.pullStrength = Number(input.value);
   } else if (id === 'pull-radius-input') {
-    pullRadius = Number(input.value);
+    game.config.pullRadius = Number(input.value);
   } else if (id === 'pull-type-input') {
-    pullType = String(input.value);
+    game.config.pullType = String(input.value);
   }
   updateMenu()
 }
@@ -603,6 +701,16 @@ function checkAllCollisions(x, y, radius, action, condition) {
   for (let j = 0; j < balls.length; j++) {
     let distance = getDistance([x, y], [balls[j].x, balls[j].y])
     if (condition(balls[j], distance)) {
+      action(balls[j], distance);
+    }
+  }
+}
+
+//does an action to every ball that is not colliding with a radius
+function checkAllNonCollisions(x, y, radius, action) {
+  for (let j = 0; j < balls.length; j++) {
+    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
+    if (distance > balls[j].radius + radius) {
       action(balls[j], distance);
     }
   }
@@ -825,6 +933,11 @@ function initAbilities() {
   abilities.pull = new Ability('pull', true);
 }
 
+//creates input objects and populates settings menu 
+function initInputs() {
+  
+}
+
 //changes settings based on if device is mobile
 function setupMobile() {
   if (window.innerWidth <= 800 && window.innerHeight <= 600) {
@@ -834,6 +947,10 @@ function setupMobile() {
 
 //initialises the page. DO NOT RUN MORE THAN ONCE!
 async function init() {
+  game = new Game();
+
+  initInputs();
+
   initAbilities();
 
   addEventListeners();
@@ -841,7 +958,7 @@ async function init() {
   updateMenu()
   
   //generates the balls
-  addBalls(ballCount);
+  addBalls(game.config.ballCount);
   
   //initiates the loop
   loop()

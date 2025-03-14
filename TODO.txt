@@ -5,3 +5,4 @@
 ====IDEAS====
 Grid collision
 orbiting
+maxspeed and minspeed in ball physics

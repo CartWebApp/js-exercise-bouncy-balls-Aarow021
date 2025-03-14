@@ -43,6 +43,7 @@ canvas {
 
 button {
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 h1, h2, h3, p, label {
@@ -316,8 +317,13 @@ nav:not(:has(#menu-toggle.active)) {
 .settings-col {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
   padding-bottom: 2rem;
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
 }
 
 .settings-row:not(.hidden) {
@@ -333,6 +339,8 @@ nav:not(:has(#menu-toggle.active)) {
 .settings-row:has(.slider-row) {
   flex-direction: column;
 }
+
+/* input-row -> number-row */
 
 .input-row {
   display: flex;
