@@ -15,7 +15,8 @@ let mouseY = 0;
 let mouse1Down = false;
 let mouse2Down = false;
 let touchesList = [];
-let game;
+
+//holds all game data (configs, ect)
 class Game {
   constructor() {
     //configurable settings
@@ -30,8 +31,6 @@ class Game {
       maxSpeed: 0.5,
       ballCount: 100,
       collision: true,
-      mouse1: 'push',   //command for left click,
-      mouse2: 'pull',   //command for right click,
       clickGenerateCount: 1,
       clickGenerateSpeed: 1,
       deleteRadius: 1,
@@ -49,28 +48,56 @@ class Game {
   }
 }
 
+let game = new Game();
+let config = game.config;
 //mouse click settings
 let abilities = {};
 let settings = {};
 let currentSettings = {};
 let mouse1 = 'push'; //command for left click
 let mouse2 = 'pull'; //command for right click
-let clickGenerateCount = 1;
-let clickGenerateSpeed = 1;
-let deleteRadius = 1;
-let splitCount = 2;
-let splitSpeed = 1;
-let pushStrength = 1.5;
-let pushRadius = 200;
-let pushMode = 'default';
-let pushType = 'linear';
-let pullMode = 'default';
-let pullStrength = 1.5;
-let pullRadius = 200;
-let pullType = 'linear';
 
 
+class Debug {
+  constructor() {
+    this.queue = ['yoooooo']; //example element would be {'mouseX: 746'}
+    this.container = document.getElementById('debug');
+    this.output = this.container.querySelector('output');
+    this.disabled = false;
+    this.toggle();
+    // this.toggle();
+  }
 
+  getTouchPositions() {
+    for (const touch of touchesList) {
+      if (!touch) { continue }
+      this.queue.push(`Touch-${touch.id}-X: ${touch.x}`);
+      this.queue.push(`Touch-${touch.id}-Y: ${touch.y}`);
+    }
+    this.printQueue();
+  }
+
+  printQueue() {
+    if (!this.disabled) {
+      this.output.innerHTML = '';
+      for (const line of this.queue) {
+        let row = document.createElement('p')
+        row.textContent = line;
+        this.output.appendChild(row);
+      }
+      this.queue = [];
+    }
+  }
+
+  clearQueue() {
+    this.queue = [];
+  }
+
+  toggle() {
+    this.disabled = this.container.classList.toggle('hidden');
+  }
+}
+let debug = new Debug();
 
 //function to generate random number
 function random(min, max) {
@@ -372,7 +399,7 @@ class Ball {
 
   //handles ball collision checking and actions
   collisionDetect() {
-    if (!game.config.collision) { return }
+    if (!config.collision) { return }
     for (let j = 0; j < balls.length; j++) {
       if (!(this === balls[j])) {
         const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
@@ -380,7 +407,7 @@ class Ball {
         //collision condition
         if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
           //If the velocity between the two are great enough
-          if (game.config.enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > game.config.absorbThresh) {
+          if (config.enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > config.absorbThresh) {
             this.fuse(balls[j])
           } else {
             this.bounce(balls[j])
@@ -413,11 +440,11 @@ class Ball {
     }
 
     this.calcVelocity();
-    let friction = game.config.friction;
+    let friction = config.friction;
     this.momentumX *= 1 - friction;
     this.momentumY *= 1 - friction;
-    this.momentumX += game.config.gravityX * this.mass;
-    this.momentumY += game.config.gravityY * this.mass;
+    this.momentumX += config.gravityX * this.mass;
+    this.momentumY += config.gravityY * this.mass;
 
     this.calcVelocity();
     if (Math.abs(this.velX) < .01 && friction > 0) {
@@ -434,6 +461,7 @@ class Ball {
   //splits a ball into 2 or more
   split(splits) {
     let randomDeg = random(0, 360);
+    let splitSpeed = config.splitSpeed;
     for (let i = 0; i < splits; i++) {
       let newVelocity = rotateVector(
         1 * splitSpeed,
@@ -467,13 +495,15 @@ function loop() {
   }
 
   requestId = requestAnimationFrame(loop);
+
+  debug.getTouchPositions();
 }
 
 //populates screen with balls
 function addBalls(num, size, x, y, speed, vx, vy) {
   for (let i = 0; i < num; i++) {
-    let radius = size || random(game.config.minSize, game.config.maxSize);
-    let newSpeed = speed ?? game.config.maxSpeed
+    let radius = size || random(config.minSize, config.maxSize);
+    let newSpeed = speed ?? config.maxSpeed
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
@@ -514,7 +544,7 @@ function buttonHandler(e) {
     startCanvas();
   } else if (id === 'reset') {
     balls = [];
-    addBalls(game.config.ballCount);
+    addBalls(config.ballCount);
   } else if (id === 'settings-toggle') {
     document.getElementById('settings').classList.toggle('hidden');
   } else if (id === 'settings-close') {
@@ -524,12 +554,12 @@ function buttonHandler(e) {
 
 //updates the elements in menu; some may need to be hidden, others shown
 function updateMenu() {
-  if (game.config.enableAbsorb === true) {
+  if (config.enableAbsorb === true) {
     show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
   } else {
     hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
   }
-  if (game.config.collision === true) {
+  if (config.collision === true) {
     show(document.querySelector('.settings-row:has(#absorption-input)'));
   } else {
     hide(document.querySelector('.settings-row:has(#absorption-input)'));
@@ -584,113 +614,57 @@ function inputHandler(e) {
   let input = e.target;
   let id = input.id;
   if (id === 'gravity-x-input' || id === 'gravity-x-input-slider') {
-    game.config.gravityX = Number(input.value);
+    config.gravityX = Number(input.value);
   } else if (id === 'gravity-y-input' || id === 'gravity-y-input-slider') {
-    game.config.gravityY = Number(input.value);
+    config.gravityY = Number(input.value);
   } else if (id === 'friction-input' || id === 'friction-input-slider') {
-    game.config.friction = Number(input.value);
+    config.friction = Number(input.value);
   } else if (id === 'absorption-input') {
-    game.config.enableAbsorb = Boolean(input.checked);
+    config.enableAbsorb = Boolean(input.checked);
   } else if (id === 'absorption-threshold-input') {
-    game.config.absorbThresh = Number(input.value);
+    config.absorbThresh = Number(input.value);
   } else if (id === 'ballcount-input') {
-    game.config.ballCount = Number(input.value);
+    config.ballCount = Number(input.value);
   } else if (id === 'min-size-input') {
-    game.config.minSize = Number(input.value);
+    config.minSize = Number(input.value);
   } else if (id === 'max-size-input') {
-    game.config.maxSize = Number(input.value);
+    config.maxSize = Number(input.value);
   } else if (id === 'max-speed-input') {
-    game.config.maxSpeed = Number(input.value);
+    config.maxSpeed = Number(input.value);
   } else if (id === 'collision-input') {
-    game.config.collision = Boolean(input.checked);
+    config.collision = Boolean(input.checked);
   } else if (id === 'mouse1-input') {
-    game.config.mouse1 = String(input.value);
+    mouse1 = String(input.value);
   } else if (id === 'mouse2-input') {
-    game.config.mouse2 = String(input.value);
+    mouse2 = String(input.value);
   } else if (id === 'generate-count-input') {
-    game.config.clickGenerateCount = Number(input.value);
+    config.clickGenerateCount = Number(input.value);
   } else if (id === 'generate-speed-input') {
-    game.config.clickGenerateSpeed = Number(input.value);
+    config.clickGenerateSpeed = Number(input.value);
   } else if (id === 'delete-radius-input') {
-    game.config.deleteRadius = Number(input.value);
+    config.deleteRadius = Number(input.value);
   } else if (id === 'split-count-input') {
-    game.config.splitCount = Number(input.value);
+    config.splitCount = Number(input.value);
   } else if (id === 'split-speed-input') {
-    game.config.splitSpeed = Number(input.value);
+    config.splitSpeed = Number(input.value);
   } else if (id === 'push-mode-input') {
-    game.config.pushMode = String(input.value);
+    config.pushMode = String(input.value);
   } else if (id === 'push-type-input') {
-    game.config.pushType = String(input.value);
+    config.pushType = String(input.value);
   } else if (id === 'push-strength-input') {
-    game.config.pushStrength = Number(input.value);
+    config.pushStrength = Number(input.value);
   } else if (id === 'push-radius-input') {
-    game.config.pushRadius = Number(input.value);
+    config.pushRadius = Number(input.value);
   } else if (id === 'pull-mode-input') {
-    game.config.pullMode = String(input.value);
+    config.pullMode = String(input.value);
   } else if (id === 'pull-strength-input') {
-    game.config.pullStrength = Number(input.value);
+    config.pullStrength = Number(input.value);
   } else if (id === 'pull-radius-input') {
-    game.config.pullRadius = Number(input.value);
+    config.pullRadius = Number(input.value);
   } else if (id === 'pull-type-input') {
-    game.config.pullType = String(input.value);
+    config.pullType = String(input.value);
   }
   updateMenu()
-}
-
-//sets up the event listeners
-function addEventListeners() {
-
-  //links sliders and number inputs
-  document.querySelectorAll('.slider-row').forEach(row => {
-    const numInput = row.querySelector('input[type=number]');
-    const slider = row.querySelector('input[type=range]');
-  
-    numInput.addEventListener('input', () => {
-      slider.value = numInput.value;
-    })
-    slider.addEventListener('input', () => {
-      numInput.value = slider.value;
-    })
-  })
-
-  //input events
-  document.querySelectorAll('input, select').forEach(input => {
-    input.addEventListener('input', inputHandler);
-  })
-
-  //adds button handler to each button
-  document.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', buttonHandler);
-  })
-  
-  //enables canvas to respond to screen size changes
-  window.addEventListener('resize', () => {
-    width = canvas.width = pageWrapper.clientWidth;
-    height = canvas.height = pageWrapper.clientHeight;
-  })
-  
-  //adds click events
-  canvas.addEventListener('mousedown', clickHandler);
-  window.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-  });
-  window.addEventListener('mouseup', (e) => {
-    if (e.button === 0) {mouse1Down = false}
-    else if (e.button === 2) {mouse2Down = false}
-  });
-
-  //add touch events
-  canvas.addEventListener('touchstart', touchHandler);
-  canvas.addEventListener('touchend', touchEndHandler);
-  canvas.addEventListener('touchcancel', touchCancelHandler);
-  canvas.addEventListener('touchmove', touchMoveHandler);
-
-
-  //disables right-click menu on canvas
-  canvas.addEventListener("contextmenu", e => {
-    e.preventDefault();
-  }, false);
 }
 
 //does an action to every ball that meets a given condition
@@ -788,19 +762,19 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
 
 //applies force to all balls in a radius
 function forceBalls(x, y, radius, strength, mode, type='linear') {
-  if (mode === 'push' && pushMode === 'default') {
+  if (mode === 'push' && config.pushMode === 'default') {
     checkAllCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (mode === 'push' && pushMode === 'inverted') {
+  } else if (mode === 'push' && config.pushMode === 'inverted') {
     checkAllNonCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (mode === 'pull' && pullMode === 'default') {
+  } else if (mode === 'pull' && config.pullMode === 'default') {
     checkAllCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (mode === 'pull' && pullMode === 'inverted') {
+  } else if (mode === 'pull' && config.pullMode === 'inverted') {
     checkAllNonCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
@@ -820,17 +794,17 @@ function pushBalls(x, y, radius, strength, type) {
 //uses an ability at a coordinate
 function useAbility(ability, [x, y]) {
   if (ability === 'generate') {
-    addBalls(clickGenerateCount, null, x, y, clickGenerateSpeed)
+    addBalls(config.clickGenerateCount, null, x, y, config.clickGenerateSpeed)
   } else if (ability === 'delete') {
-    deleteBalls(x, y, deleteRadius);
+    deleteBalls(x, y, config.deleteRadius);
   } else if (ability === 'split') {
     checkOneCollision(x, y, 1, (ball) => {
-      ball.split(splitCount);
+      ball.split(config.splitCount);
     }) 
   } else if (ability === 'push') {
-    pushBalls(x, y, pushRadius, pushStrength, pushType);
+    pushBalls(x, y, config.pushRadius, config.pushStrength, config.pushType);
   } else if (ability === 'pull') {
-    pullBalls(x, y, pullRadius, pullStrength, pullType);
+    pullBalls(x, y, config.pullRadius, config.pullStrength, config.pullType);
   } 
 }
 
@@ -884,7 +858,7 @@ function touchHandler(e) {
   let touches = e.targetTouches;
   for (const touch of touches) {
     let id = touch.identifier
-    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY}
+    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {delete touchesList[id]}, 15000)}
   
     if (ability.repeats) {
       repeatAbility(ability.name, ability.interval, ()=>getTouchCoords(id), ()=>touchesList[id]);
@@ -900,8 +874,12 @@ function touchMoveHandler(e) {
   e.stopPropagation();
   let touches = e.changedTouches;
   for (const touch of touches) {
-    touchesList[touch.identifier].x = touch.clientX;
-    touchesList[touch.identifier].y = touch.clientY;
+    let id = touch.identifier;
+    if (!TouchList[id]) { continue }
+    clearTimeout(touchesList[id].timeoutId);
+    touchesList[id].x = touch.clientX;
+    touchesList[id].y = touch.clientY;
+    touchesList[id].timeoutId = setTimeout(() => {delete touchesList[identifier]}, 10000);
   }
 }
 
@@ -913,7 +891,6 @@ function touchEndHandler(e) {
   for (const touch of touches) {
     let id = touch.identifier;
     delete touchesList[id];
-
   }
 }
 
@@ -922,6 +899,73 @@ function touchCancelHandler(e) {
   e.preventDefault();
   let id = e.touch.identifier;
   delete touchesList[id];
+}
+
+//handles keypresses
+function keyHandler(e) {
+  let key = e.key;
+  if (key === 'F9') {
+    debug.toggle();
+  }
+}
+
+//sets up the event listeners
+function addEventListeners() {
+
+  //links sliders and number inputs
+  document.querySelectorAll('.slider-row').forEach(row => {
+    const numInput = row.querySelector('input[type=number]');
+    const slider = row.querySelector('input[type=range]');
+  
+    numInput.addEventListener('input', () => {
+      slider.value = numInput.value;
+    })
+    slider.addEventListener('input', () => {
+      numInput.value = slider.value;
+    })
+  })
+
+  //input events
+  document.querySelectorAll('input, select').forEach(input => {
+    input.addEventListener('input', inputHandler);
+  })
+
+  //adds button handler to each button
+  document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', buttonHandler);
+  })
+  
+  //enables canvas to respond to screen size changes
+  window.addEventListener('resize', () => {
+    width = canvas.width = pageWrapper.clientWidth;
+    height = canvas.height = pageWrapper.clientHeight;
+  })
+  
+  //adds click events
+  canvas.addEventListener('mousedown', clickHandler);
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {mouse1Down = false}
+    else if (e.button === 2) {mouse2Down = false}
+  });
+
+  //add touch events
+  canvas.addEventListener('touchstart', touchHandler);
+  canvas.addEventListener('touchend', touchEndHandler);
+  canvas.addEventListener('touchcancel', touchCancelHandler);
+  canvas.addEventListener('touchmove', touchMoveHandler);
+
+
+  //disables right-click menu on canvas
+  canvas.addEventListener("contextmenu", e => {
+    e.preventDefault();
+  }, false);
+
+  //keypress events
+  window.addEventListener('keyup', keyHandler)
 }
 
 //generates ability settings
@@ -947,7 +991,6 @@ function setupMobile() {
 
 //initialises the page. DO NOT RUN MORE THAN ONCE!
 async function init() {
-  game = new Game();
 
   initInputs();
 
@@ -958,7 +1001,7 @@ async function init() {
   updateMenu()
   
   //generates the balls
-  addBalls(game.config.ballCount);
+  addBalls(config.ballCount);
   
   //initiates the loop
   loop()
