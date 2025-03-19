@@ -45,6 +45,13 @@ class Game {
       pullRadius: 200,
       pullType: 'linear'
     }
+
+    //represents the settings menu
+    this.menu = {
+      'general': {},
+      'ball-generation': {},
+      'abilities': {}
+    }
   }
 }
 
@@ -57,7 +64,7 @@ let currentSettings = {};
 let mouse1 = 'push'; //command for left click
 let mouse2 = 'pull'; //command for right click
 
-
+//debug menu
 class Debug {
   constructor() {
     this.queue = ['yoooooo']; //example element would be {'mouseX: 746'}
@@ -188,11 +195,10 @@ function rotateVector(x, y, degrees, center=[0,0]) {
 }
 
 //base class for inputs
-class Input {
-  constructor(id, type, parentID, displayName, value, dependants) {
+class Config {
+  constructor(id, type, displayName, value, dependants) {
     this.id = id;
     this.type = type;
-    this.parentID = parentID;
     this.displayName = displayName;
     this.value = value;
     this.dependants = dependants || [];
@@ -236,7 +242,7 @@ class Input {
 }
 
 //class for number inputs
-class numberInput extends Input {
+class ConfigNumber extends Input {
   constructor(id, parentID, displayName, value=0, min, max, step, requirements) {
     super(id, 'number', parentID, displayName, value ?? 0, requirements);
     this.min = min ?? -Infinity;
@@ -496,7 +502,7 @@ function loop() {
 
   requestId = requestAnimationFrame(loop);
 
-  debug.getTouchPositions();
+  // debug.getTouchPositions();
 }
 
 //populates screen with balls
@@ -979,7 +985,8 @@ function initAbilities() {
 
 //creates input objects and populates settings menu 
 function initInputs() {
-  
+  let settingsList = []
+  settingsList.push(new ConfigSlider('gravity-y', 0, -Infinity, Infinity, .001, -1, 1, .02))
 }
 
 //changes settings based on if device is mobile
