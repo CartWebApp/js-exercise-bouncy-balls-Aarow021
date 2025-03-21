@@ -8,3 +8,14 @@ orbiting
 maxspeed and minspeed in ball physics
 auto generate balls
 presets
+choose color of ball generation and click
+color power
+freeze/slow power
+stationary abilities (can animate)
+have powers only affect certain colors
+link same settings in different powers
+link push and pull settings
+wall settings (collision, bounce multi, repulsion, size)
+playable character
+collision dampening (elasticity)
+change dropdowns
