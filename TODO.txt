@@ -7,3 +7,4 @@ Grid collision
 orbiting
 maxspeed and minspeed in ball physics
 auto generate balls
+presets

@@ -21,19 +21,20 @@ class Game {
   constructor() {
     //configurable settings
     this.config = {
+      enableMouse2: true,
       friction: 0,
       gravityX: 0,
       gravityY: 0,
       enableAbsorb: false,
       absorbThresh: 0, //min combined velocity to absorb
-      minSize: 10,
-      maxSize: 20,
-      maxSpeed: 0.5,
-      ballCount: 100,
+      ballGenMinSize: 10,
+      ballGenMaxSize: 20,
+      ballGenSpeed: 0.5,
+      ballGenCount: 100,
       collision: true,
       clickGenerateCount: 1,
       clickGenerateSpeed: 1,
-      deleteRadius: 1,
+      deleteRadius: 10,
       splitCount: 2,
       splitSpeed: 1,
       pushMode: 'default',
@@ -43,26 +44,26 @@ class Game {
       pullMode: 'default',
       pullStrength: 1.5,
       pullRadius: 200,
-      pullType: 'linear'
+      pullType: 'linear',
+      mouse1: 'push', //command for left click
+      mouse2: 'pull' //command for right click
     }
 
-    //represents the settings menu
-    this.menu = {
-      'general': {},
-      'ball-generation': {},
-      'abilities': {}
-    }
+    //holds all the config elements and containers
+    //ex: {'split-count': ConfigNumber}
+    this.configDOM = {}
   }
 }
 
 let game = new Game();
 let config = game.config;
+let configDOM = game.configDOM;
 //mouse click settings
 let abilities = {};
 let settings = {};
 let currentSettings = {};
-let mouse1 = 'push'; //command for left click
-let mouse2 = 'pull'; //command for right click
+let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star'];
+let pullTypes = pushTypes;
 
 //debug menu
 class Debug {
@@ -194,75 +195,329 @@ function rotateVector(x, y, degrees, center=[0,0]) {
   return { x: finalX, y: finalY };
 }
 
-//base class for inputs
-class Config {
-  constructor(id, type, displayName, value, dependants) {
+class DOMElement {
+  constructor(id, tag, requirements, action) {
     this.id = id;
-    this.type = type;
-    this.displayName = displayName;
-    this.value = value;
-    this.dependants = dependants || [];
-    this.hidden = true;
+    this.tag = tag ?? 'div';
+    this.hidden = false;
     this.element;
+    this.parent;
+    this.requirements = requirements ?? [];
+    this.type;
+    this.action = action;
   }
 
-  //builds element in parent element
-  spawn() {
-    this.element = this.generateBase();
-    document.getElementById(parentID).appendChild(this.element);
-  }
+  //generates the innerHTML for the element
+  generateInner() {}
+  //generates the base element (no innerHTML)
   generateBase() {
     let element = document.createElement('div');
-    element.type = this.type;
-    element.classList.add('settings-row');
-    element.classList.add('hidden');
-    element.classList.add(`${this.type}-row`);
     return element;
   }
+  //adds event listeners to the element
+  addEventListeners() {}
   //hides the element
   hide() {
-    this.getElement().classList.add('hidden');
+    this.element.classList.add('hidden');
   }
   //shows the element
   show() {
-    this.getElement().classList.remove('hidden');
-  }
-  //hides if requirements not met, shows if they are met
-  checkRequirements() {
-    if (this.requirements(this)) {
-      this.show();
-    } else {
-      this.hide();
-    }
+    this.element.classList.remove('hidden');
   }
   //gets the DOM element for this input
   getElement() {
     return document.getElementById(this.id);
   }
+  //hides if any requirement is not met, shows otherwise
+  checkRequirements() {
+    for (const requirement of this.requirements) {
+      let n2 = config[requirement.n2];
+      if (config[requirement.n] != requirement.v && n2 != requirement.v) {
+        this.hide();
+        return;
+      }
+    }
+    this.show();
+  }
+}
+
+//base class for inputs
+class ConfigElement extends DOMElement {
+  constructor(id, inputType, displayName, bindedConfig, value, requirements, action) {
+    super(id, 'div', requirements, action)
+    this.inputType = inputType;
+    this.displayName = displayName;
+    this.value = value;
+    this.hidden = true;
+    this.bindedConfig = bindedConfig ?? this.id;
+    this.type = 'input';
+    this.element = this.generateBase();
+    configDOM[this.id] = this;
+
+  }
+
+  //generates the base element (no innerHTML)
+  generateBase() {
+    let element = document.createElement('div');
+    element.inputType = this.inputType;
+    element.classList.add('settings-row');
+    element.classList.add('hidden');
+    element.classList.add(`${this.inputType}-row`);
+    return element;
+  }
+  addEventListeners() {
+    this.element.querySelector('input').addEventListener('input', inputHandler);
+  }
+  //binds config variable to the element value
+  bindConfig(configName) {
+    this.bindedConfig = configName;
+  }
+  //changes value and binded setting value
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    config[this.bindedConfig] = newValue;
+    if (overrideDOM) {
+      this.element.querySelector('input').value = this.value;
+    }
+  }
 }
 
 //class for number inputs
-class ConfigNumber extends Input {
-  constructor(id, parentID, displayName, value=0, min, max, step, requirements) {
-    super(id, 'number', parentID, displayName, value ?? 0, requirements);
+class ConfigNumber extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, min, max, step, requirements, action) {
+    super(id, 'number', displayName, bindedConfig, value ?? 0, requirements, action);
     this.min = min ?? -Infinity;
     this.max = max ?? -Infinity;
     this.step = step ?? 1;
+    this.generateInner();
   }
 
-  spawn() {
-    let element = this.generateBase();
-    element.innerHTML = `
-              <label for="${this.id}">${this.displayName}</label>
-              <input type="number" id="${this.id}-input" value="${this.value}"  step="${this.step}">`
+  generateInner() {
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <input type="number" id="${this.id}-input" value="${this.value}" min="${this.min}" max="${this.max}" step="${this.step}">`
   }
 
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    config[this.bindedConfig] = Number(newValue);
+    if (overrideDOM) {
+      this.element.querySelector('input').value = this.value;
+    }
+  }
 }
 
-//base class for a config object
-//holds a DOM element and an option
-class Config {
+//class for number inputs
+class ConfigSlider extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, min, max, step, sliderMin, sliderMax, sliderStep, requirements, action) {
+    super(id, 'slider', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.min = min ?? -Infinity;
+    this.max = max ?? -Infinity;
+    this.step = step ?? 1;
+    this.sliderMin = sliderMin ?? this.min;
+    this.sliderMax = sliderMax ?? this.max;
+    this.sliderStep = sliderStep ?? this.step;
+    this.generateInner();
+  }
 
+  generateInner() {
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <div class="slider-container">
+        <input type="number" id="${this.id}-input" value="${this.value}" min="${this.min}" max="${this.max}" step="${this.step}">
+        <input type="range" id="${this.id}-input-slider" value="${this.value}" min="${this.sliderMin}" max="${this.sliderMax}" step="${this.sliderStep}">
+      </div>`
+  } 
+
+  addEventListeners() {
+    const numInput = this.element.querySelector('input[type=number]');
+    const slider = this.element.querySelector('input[type=range]');
+    numInput.addEventListener('input', (e) => {
+      slider.value = numInput.value;
+      inputHandler(e);
+    })
+    slider.addEventListener('input', (e) => {
+      numInput.value = slider.value;
+      inputHandler(e);
+    })
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    config[this.bindedConfig] = Number(newValue);
+    if (overrideDOM) {
+      this.element.querySelectorAll('input').forEach((input => {
+        input.value = this.value;
+      }))
+    }
+  }
+}
+
+//class for number inputs
+class ConfigCheckbox extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, requirements, action) {
+    super(id, 'checkbox', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.generateInner();
+  }
+
+  generateInner() {
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <div class="checkbox-container">
+        <input type="checkbox" id="${this.id}-input" checked="${this.value}">
+        <span class="checkmark"></span>
+      </div>`;
+  }
+
+  addEventListeners() {
+    this.element.querySelector('input').addEventListener('input', inputHandler);
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    config[this.bindedConfig] = newValue;
+    if (overrideDOM) {
+      this.element.querySelector('input').checked = newValue;
+    }
+  }
+}
+
+//class for number inputs
+class ConfigDropdown extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, options, requirements, action) {
+    super(id, 'dropdown', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.options = options;
+    this.generateInner();
+  }
+
+  generateInner() {
+    let optionsHTML = '';
+    for (const option of this.options) {
+      optionsHTML += `<option value="${option}">${option}</option>`
+    }
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <select id="${this.id}-input">${optionsHTML}</select>`
+  }
+
+  addEventListeners() {
+    this.element.querySelector('select').addEventListener('input', inputHandler);
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    config[this.bindedConfig] = newValue;
+    if (overrideDOM) {
+      this.element.querySelector('select').value = newValue;
+    }
+  }
+}
+
+//container for config
+class Container extends DOMElement {
+  constructor(id, displayName, children, requirements, action) {
+    super(id, 'div', requirements, action);
+    this.type = 'container';
+    this.displayName = displayName ?? '';
+    this.children = children ?? [];
+    this.layer = -1;
+    this.element = this.generateBase();
+    this.generateInner();
+    for (const child of this.children) {
+      this.bindChild(child)
+    }
+    configDOM[this.id] = this;
+  }
+
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.id = `${this.id}-section`;
+    element.classList.add('settings-section');
+    element.classList.add('hidden');
+    return element;
+  }
+
+  generateInner() {
+    this.element.innerHTML = `<h3>${this.displayName}</h3>`
+  }
+
+  //adds child to element
+  bindChild(child) {
+    if (child.parent && child.parent != this) {
+      child.parent.removeChild(child);
+    }
+    this.element.appendChild(child.element);
+    child.parent = this;
+    child.layer = this.layer + 1;
+  }
+
+  //adds child to object and binds
+  addChild(newChild) {
+    this.children.push(newChild);
+    this.bindChild(newChild);
+  }
+
+  //removes child from element and object
+  removeChild(child) {
+    this.element.querySelector(`.settings-row:has(#${child.id}-input)`).remove();
+    this.children.splice(this.children.indexOf(child), 1);
+  }
+
+  addEventListeners() {
+    for (const child of this.children) {
+      child.addEventListeners();
+    }
+  }
+}
+
+//class for main categories
+class MainContainer extends Container {
+  constructor(id, displayName, children, requirements) {
+    super(id, displayName, children, requirements);
+    this.layer = 1;
+  }
+
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.id = `${this.id}-section`;
+    element.classList.add('settings-section-main');
+    element.classList.add('hidden');
+    return element;
+  }
+  generateInner() {
+    this.element.innerHTML = `<hr><h2>${this.displayName}</h2>`
+  }
+}
+
+class LayoutContainer extends Container {
+  constructor(id, children, requirements) {
+    super(id, '', children, requirements);
+  }
+
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.id = `${this.id}-section-layout`;
+    element.classList.add('settings-layout');
+    element.classList.add('hidden');
+    return element;
+  }
+
+  generateInner() {
+    this.element.innerHTML = ``;
+  }
+
+  //adds child to element
+  bindChild(child) {
+    if (child.parent && child.parent != this) {
+      child.parent.removeChild(child);
+    }
+    this.element.appendChild(child.element);
+    child.parent = this;
+    child.layer = this.layer;
+  }
 }
 
 //base class for abilities
@@ -508,8 +763,8 @@ function loop() {
 //populates screen with balls
 function addBalls(num, size, x, y, speed, vx, vy) {
   for (let i = 0; i < num; i++) {
-    let radius = size || random(config.minSize, config.maxSize);
-    let newSpeed = speed ?? config.maxSpeed
+    let radius = size || random(config.ballGenMinSize, config.ballGenMaxSize);
+    let newSpeed = speed ?? config.ballGenSpeed
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
@@ -550,7 +805,7 @@ function buttonHandler(e) {
     startCanvas();
   } else if (id === 'reset') {
     balls = [];
-    addBalls(config.ballCount);
+    addBalls(config.ballGenCount);
   } else if (id === 'settings-toggle') {
     document.getElementById('settings').classList.toggle('hidden');
   } else if (id === 'settings-close') {
@@ -560,115 +815,24 @@ function buttonHandler(e) {
 
 //updates the elements in menu; some may need to be hidden, others shown
 function updateMenu() {
-  if (config.enableAbsorb === true) {
-    show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-  }
-  if (config.collision === true) {
-    show(document.querySelector('.settings-row:has(#absorption-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#absorption-input)'));
-    hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-  }
-
-  if (mouse1 === 'generate' || mouse2 === 'generate') {
-    show(document.querySelector('.settings-row:has(#generate-count-input)'));
-    show(document.querySelector('.settings-row:has(#generate-speed-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#generate-count-input)'));
-    hide(document.querySelector('.settings-row:has(#generate-speed-input)'));
-  }
-  if (mouse1 === 'delete' || mouse2 === 'delete') {
-    show(document.querySelector('.settings-row:has(#delete-radius-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#delete-radius-input)'));
-  }
-  if (mouse1 === 'split' || mouse2 === 'split') {
-    show(document.querySelector('.settings-row:has(#split-count-input)'));
-    show(document.querySelector('.settings-row:has(#split-speed-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#split-count-input)'));
-    hide(document.querySelector('.settings-row:has(#split-speed-input)'));
-  }
-  if (mouse1 === 'push' || mouse2 === 'push') {
-    show(document.querySelector('.settings-row:has(#push-mode-input)'));
-    show(document.querySelector('.settings-row:has(#push-type-input)'));
-    show(document.querySelector('.settings-row:has(#push-strength-input)'));
-    show(document.querySelector('.settings-row:has(#push-radius-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#push-mode-input)'));
-    hide(document.querySelector('.settings-row:has(#push-type-input)'));
-    hide(document.querySelector('.settings-row:has(#push-strength-input)'));
-    hide(document.querySelector('.settings-row:has(#push-radius-input)'));
-  }
-  if (mouse1 === 'pull' || mouse2 === 'pull') {
-    show(document.querySelector('.settings-row:has(#pull-mode-input)'));
-    show(document.querySelector('.settings-row:has(#pull-type-input)'));
-    show(document.querySelector('.settings-row:has(#pull-strength-input)'));
-    show(document.querySelector('.settings-row:has(#pull-radius-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#pull-mode-input)'));
-    hide(document.querySelector('.settings-row:has(#pull-type-input)'));
-    hide(document.querySelector('.settings-row:has(#pull-strength-input)'));
-    hide(document.querySelector('.settings-row:has(#pull-radius-input)'));
+  for (const config of Object.values(configDOM)) {
+    config.checkRequirements();
   }
 }
 
 //sets variables to values of inputs
 function inputHandler(e) {
-  let input = e.target;
-  let id = input.id;
-  if (id === 'gravity-x-input' || id === 'gravity-x-input-slider') {
-    config.gravityX = Number(input.value);
-  } else if (id === 'gravity-y-input' || id === 'gravity-y-input-slider') {
-    config.gravityY = Number(input.value);
-  } else if (id === 'friction-input' || id === 'friction-input-slider') {
-    config.friction = Number(input.value);
-  } else if (id === 'absorption-input') {
-    config.enableAbsorb = Boolean(input.checked);
-  } else if (id === 'absorption-threshold-input') {
-    config.absorbThresh = Number(input.value);
-  } else if (id === 'ballcount-input') {
-    config.ballCount = Number(input.value);
-  } else if (id === 'min-size-input') {
-    config.minSize = Number(input.value);
-  } else if (id === 'max-size-input') {
-    config.maxSize = Number(input.value);
-  } else if (id === 'max-speed-input') {
-    config.maxSpeed = Number(input.value);
-  } else if (id === 'collision-input') {
-    config.collision = Boolean(input.checked);
-  } else if (id === 'mouse1-input') {
-    mouse1 = String(input.value);
-  } else if (id === 'mouse2-input') {
-    mouse2 = String(input.value);
-  } else if (id === 'generate-count-input') {
-    config.clickGenerateCount = Number(input.value);
-  } else if (id === 'generate-speed-input') {
-    config.clickGenerateSpeed = Number(input.value);
-  } else if (id === 'delete-radius-input') {
-    config.deleteRadius = Number(input.value);
-  } else if (id === 'split-count-input') {
-    config.splitCount = Number(input.value);
-  } else if (id === 'split-speed-input') {
-    config.splitSpeed = Number(input.value);
-  } else if (id === 'push-mode-input') {
-    config.pushMode = String(input.value);
-  } else if (id === 'push-type-input') {
-    config.pushType = String(input.value);
-  } else if (id === 'push-strength-input') {
-    config.pushStrength = Number(input.value);
-  } else if (id === 'push-radius-input') {
-    config.pushRadius = Number(input.value);
-  } else if (id === 'pull-mode-input') {
-    config.pullMode = String(input.value);
-  } else if (id === 'pull-strength-input') {
-    config.pullStrength = Number(input.value);
-  } else if (id === 'pull-radius-input') {
-    config.pullRadius = Number(input.value);
-  } else if (id === 'pull-type-input') {
-    config.pullType = String(input.value);
+  let id = e.target.id;
+  let value;
+  if (e.target.type === 'checkbox') {
+    value = e.target.checked;
+  } else {
+    value = e.target.value;
+  }
+  let input = configDOM[id.substring(0, id.indexOf('-'))]
+  input.setValue(value, false);
+  if (input.action) {
+    input.action(input);
   }
   updateMenu()
 }
@@ -735,7 +899,7 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
     let xSign = (x - ball.x > 0) ? 1: -1;
     let YSign = (y - ball.y > 0) ? 1: -1;
 
-    if (type === 'test') {
+    if (type === 'star') {
       forceX = (strength * 100) / (x - ball.x) / (dist * dist);
       forceY = (strength * 100) / (y - ball.y) / (dist * dist);
     } else if (type === 'linear') {
@@ -840,11 +1004,11 @@ function clickHandler(e) {
   let isMouseDown;
 
   if (e.button === 0) { //left mouse
-    ability = abilities[mouse1];
+    ability = abilities[config.mouse1];
     mouse1Down = true;
     isMouseDown = () => mouse1Down;
   } else if (e.button === 2) { //right mouse
-    ability = abilities[mouse2];
+    ability = abilities[config.mouse2];
     mouse2Down = true;
     isMouseDown = () => mouse2Down;
   }
@@ -860,7 +1024,7 @@ function clickHandler(e) {
 function touchHandler(e) {
   e.preventDefault();
   e.stopPropagation();
-  let ability = abilities[mouse1];
+  let ability = abilities[config.mouse1];
   let touches = e.targetTouches;
   for (const touch of touches) {
     let id = touch.identifier
@@ -881,7 +1045,7 @@ function touchMoveHandler(e) {
   let touches = e.changedTouches;
   for (const touch of touches) {
     let id = touch.identifier;
-    if (!TouchList[id]) { continue }
+    // if (!TouchList[id]) { continue }
     clearTimeout(touchesList[id].timeoutId);
     touchesList[id].x = touch.clientX;
     touchesList[id].y = touch.clientY;
@@ -915,26 +1079,18 @@ function keyHandler(e) {
   }
 }
 
+//makes mouse abilities mutually exclusive
+function checkMouseValues(mouse) {
+  // let primary = mouse?.id ?? 'mouse1';
+  // if (primary === 'mouse1' && config.mouse2 === config.mouse1 && config.mouse2 != 'none') {
+  //   configDOM.mouse2.setValue('none');
+  // } else if (config.mouse1 === config.mouse2 && config.mouse1 != 'none') {
+  //   configDOM.mouse1.setValue('none');
+  // }
+}
+
 //sets up the event listeners
 function addEventListeners() {
-
-  //links sliders and number inputs
-  document.querySelectorAll('.slider-row').forEach(row => {
-    const numInput = row.querySelector('input[type=number]');
-    const slider = row.querySelector('input[type=range]');
-  
-    numInput.addEventListener('input', () => {
-      slider.value = numInput.value;
-    })
-    slider.addEventListener('input', () => {
-      numInput.value = slider.value;
-    })
-  })
-
-  //input events
-  document.querySelectorAll('input, select').forEach(input => {
-    input.addEventListener('input', inputHandler);
-  })
 
   //adds button handler to each button
   document.querySelectorAll('button').forEach(btn => {
@@ -976,40 +1132,109 @@ function addEventListeners() {
 
 //generates ability settings
 function initAbilities() {
-  abilities.generate = new Ability('generate', false);
-  abilities.delete = new Ability('delete', true, 5);
-  abilities.split = new Ability('split', false);
+  abilities.none = new Ability('none', false);
   abilities.push = new Ability('push', true);
   abilities.pull = new Ability('pull', true);
+  abilities.split = new Ability('split', false);
+  abilities.generate = new Ability('generate', false);
+  abilities.delete = new Ability('delete', true, 5);
 }
 
 //creates input objects and populates settings menu 
 function initInputs() {
-  let settingsList = []
-  settingsList.push(new ConfigSlider('gravity-y', 0, -Infinity, Infinity, .001, -1, 1, .02))
+  //GENERAL
+  const general = new MainContainer('general', 'General');
+  general.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
+  general.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
+  general.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
+  general.addChild(new ConfigCheckbox('collision', 'Collision', null, true));
+  general.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [{n: 'collision', v: true}]));
+  general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [{n: 'enableAbsorb', v: true}]));
+
+  //GENERATION
+  const generation = new MainContainer('ballGeneration', 'Ball Generation');
+  generation.addChild(new ConfigNumber('ballGenCount', 'Count', null, 100, 0, Infinity, 1));
+  generation.addChild(new ConfigNumber('ballGenMinSize', 'Min Size', null, 10, 0, Infinity, 1));
+  generation.addChild(new ConfigNumber('ballGenMaxSize', 'Max Size', null, 20, 0, Infinity, 1));
+  generation.addChild(new ConfigNumber('ballGenSpeed', 'Speed', null, 0.5, 0, Infinity, .01));
+
+  //ABILITIES
+  const abilitiesContainer = new MainContainer('abilities', 'Abilities');
+  const availableAbilities = Object.values(abilities).map(a => a.name);
+  abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null, checkMouseValues));
+  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{n: 'enableMouse2', v: true}], checkMouseValues));
+  let abilityLayout = new LayoutContainer('abilityLayout');
+  //-push
+  let pushContainer = new Container('pushContainer', 'Push', null, [{n: 'mouse1', n2: 'mouse2', v: 'push'}]);
+  pushContainer.addChild(new ConfigDropdown('pushMode', 'Push Mode', null, 'default', ['default', 'inverted']));
+  pushContainer.addChild(new ConfigDropdown('pushType', 'Push Type', null, 'linear', pushTypes)); 
+  pushContainer.addChild(new ConfigNumber('pushStrength', 'Push Strength', null, 1.5, 0, Infinity, .01));
+  pushContainer.addChild(new ConfigNumber('pushRadius', 'Push Radius', null, 1.5, 0, Infinity, .01));
+  abilityLayout.addChild(pushContainer);
+  //-pull
+  let pullContainer = new Container('pullContainer', 'Pull', null, [{n: 'mouse1', n2: 'mouse2', v: 'pull'}]);
+  pullContainer.addChild(new ConfigDropdown('pullMode', 'Pull Mode', null, 'default', ['default', 'inverted']));
+  pullContainer.addChild(new ConfigDropdown('pullType', 'Pull Type', null, 'linear', pullTypes)); 
+  pullContainer.addChild(new ConfigNumber('pullStrength', 'Pull Strength', null, 1.5, 0, Infinity, .01));
+  pullContainer.addChild(new ConfigNumber('pullRadius', 'Pull Radius', null, 1.5, 0, Infinity, .01));
+  abilityLayout.addChild(pullContainer);
+  //-split
+  let splitContainer = new Container('splitContainer', 'Split', null, [{n: 'mouse1', n2: 'mouse2', v: 'split'}]);
+  splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', null, 2, 2, Infinity, 1));
+  splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', null, 1, 0, Infinity, .01));
+  abilityLayout.addChild(splitContainer);
+  //-generate
+  let generateContainer = new Container('generateContainer', 'Generate', null, [{n: 'mouse1', n2: 'mouse2', v: 'generate'}]);
+  generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', null, 2, 1, Infinity, 1));
+  generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', null, 1, 0, Infinity, .01));
+  abilityLayout.addChild(generateContainer);
+  let deleteContainer = new Container('deleteContainer', 'Delete', null, [{n: 'mouse1', n2: 'mouse2', v: 'delete'}]);
+  deleteContainer.addChild(new ConfigNumber('deleteRadius', 'Delete Radius', null, 10, 0, Infinity, 1));
+  abilityLayout.addChild(deleteContainer);
+  abilitiesContainer.addChild(abilityLayout);
+
+  const settingsContainer = document.querySelector('.settings-col');
+  settingsContainer.appendChild(general.element);
+  settingsContainer.appendChild(generation.element);
+  settingsContainer.appendChild(abilitiesContainer.element);
+  general.addEventListeners();
+  generation.addEventListeners();
+  abilitiesContainer.addEventListeners();
+
+  for (const object of Object.values(configDOM)) {
+    if (object.type === 'input') {
+      object.setValue(config[object.bindedConfig]);
+    }
+  }
 }
 
 //changes settings based on if device is mobile
 function setupMobile() {
-  if (window.innerWidth <= 800 && window.innerHeight <= 600) {
-    //do stuff
+  if (window.innerWidth <= 800 && window.innerHeight <= 800 ||
+      window.innerWidth <= 1000 && window.innerHeight <= 600) {
+    configDOM.mouse2.setValue('none');
+    config.enableMouse2 = false;
   }
 }
 
 //initialises the page. DO NOT RUN MORE THAN ONCE!
 async function init() {
+  
+  initAbilities();
 
   initInputs();
 
-  initAbilities();
+  checkMouseValues();
 
   addEventListeners();
+
+  setupMobile();
 
   updateMenu()
   
   //generates the balls
-  addBalls(config.ballCount);
-  
+  addBalls(config.ballGenCount);
+
   //initiates the loop
   loop()
 }
