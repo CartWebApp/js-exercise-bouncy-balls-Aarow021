@@ -193,15 +193,18 @@ nav .wrap {
 
 .icon-wrap {
   width: 48px;
-  height: 48px;
+  aspect-ratio: 1 / 1;
 }
 
 .icon-wrap button {
   height: 100%;
   width: 100%;
-  background-color: transparent;
+  background-color: white;
   border: none;
   cursor: pointer;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
 }
 
 nav:not(:has(#menu-toggle.active)) {
@@ -213,15 +216,15 @@ nav:not(:has(#menu-toggle.active)) {
 }
 
 #menu-toggle {
-  background-image: url("imgs/chevron-down.svg");
+  mask-image: url("imgs/chevron-down.svg");
 }
 
 #menu-toggle.active {
-  background-image: url("imgs/chevron-up.svg");
+  mask-image: url("imgs/chevron-up.svg");
 }
 
 #settings-toggle {
-  background-image: url("imgs/settings.svg");
+  mask-image: url("imgs/settings.svg");
 }
 
 .icon-wrap:has(#settings-toggle) {
@@ -229,7 +232,7 @@ nav:not(:has(#menu-toggle.active)) {
 }
 
 #play {
-  background-image: url("imgs/play.svg");
+  mask-image: url("imgs/play.svg");
 }
 
 .icon-wrap:has(#play) {
@@ -237,7 +240,7 @@ nav:not(:has(#menu-toggle.active)) {
 }
 
 #pause {
-  background-image: url("imgs/pause.svg");
+  mask-image: url("imgs/pause.svg");
   order: 4;
 }
 
@@ -246,12 +249,22 @@ nav:not(:has(#menu-toggle.active)) {
 }
 
 #reset {
-  background-image: url("imgs/refresh.svg");
+  mask-image: url("imgs/refresh.svg");
   order: 5;
 }
 
 .icon-wrap:has(#reset) {
   order: 5;
+}
+
+#general-toggle {
+  mask-image: url(imgs/settings.svg);
+}
+#generation-toggle {
+  mask-image: url(imgs/ball-plus.svg);
+}
+#abilities-toggle {
+  mask-image: url(imgs/tap.svg);
 }
 
 
@@ -279,6 +292,7 @@ nav:not(:has(#menu-toggle.active)) {
               height 0ms;
   resize: both;
   overflow: auto;
+  container-type: size;
 }
 
 #settings.hidden {
@@ -306,13 +320,35 @@ nav:not(:has(#menu-toggle.active)) {
   transform: translateX(-50%);
 }
 
+.settings-heading .nav {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  justify-content: left;
+  gap: clamp(1rem, 15%, 2rem);
+  padding: 1rem;
+}
+
+.settings-heading .nav .icon-wrap {
+  width: clamp(36px, 10%, 48px);
+  transition: 200ms ease background-color;
+}
+
+.settings-heading .nav .icon-wrap button {
+  background-color: rgb(255, 255, 255);
+}
+
+.settings-heading .nav .icon-wrap button.active {
+  background-color: rgb(246, 255, 123);
+}
+
 .icon-wrap:has(#settings-close) {
   width: 36px;
   height: 36px;
 }
 
 #settings-close {
-  background-image: url('imgs/x.svg');
+  mask-image: url('imgs/x.svg');
 }
 
 .settings-col {
@@ -336,7 +372,7 @@ nav:not(:has(#menu-toggle.active)) {
   background-color: rgba(255, 255, 255, 0.036);
 }
 
-.settings-section h3{
+.settings-section h3 {
   font-size: 26px;
 }
 
@@ -361,6 +397,10 @@ nav:not(:has(#menu-toggle.active)) {
 .settings-row.hidden, .settings-section.hidden {
   display: none;
   opacity: 0;
+}
+
+.settings-section-main.hidden {
+  display: none;
 }
 
 .slider-row {
@@ -490,11 +530,11 @@ input[type=checkbox]:hover {
   }
 
   #menu-toggle {
-    background-image: url("imgs/menu.svg");
+    mask-image: url("imgs/menu.svg");
   }
 
   #menu-toggle.active {
-    background-image: url("imgs/menu.svg");
+    mask-image: url("imgs/menu.svg");
   }
 
   .icon-wrap:has(#menu-toggle.active) {
@@ -580,5 +620,11 @@ input[type=checkbox]:hover {
   nav {
     top: -16px;
     transform: scale(.75);
+  }
+}
+
+@container (max-width: 30rem) {
+  #settings label, #settings select, #settings input {
+    font-size: clamp(14px, 4cqw, 20px);
   }
 }

@@ -487,7 +487,7 @@ class MainContainer extends Container {
     return element;
   }
   generateInner() {
-    this.element.innerHTML = `<hr><h2>${this.displayName}</h2>`
+    this.element.innerHTML = `<h2>${this.displayName}</h2>`
   }
 }
 
@@ -793,6 +793,29 @@ function startCanvas() {
   requestAnimationFrame(loop);
 }
 
+//toggles a settings menu main section
+function toggleSection(selectedBtn) {
+  let container = selectedBtn.parentElement.parentElement;
+  for (let button of container.querySelectorAll('button')) {
+    if (button.id != selectedBtn.id) {
+      button.classList.remove('active');
+    }
+  }
+  selectedBtn.classList.add('active');
+  let links = {
+    'general-toggle': 'general-section',
+    'generation-toggle': 'ballGeneration-section', 
+    'abilities-toggle': 'abilities-section'
+  }
+  for (section of document.querySelectorAll('.settings-section-main')) {
+    if (links[selectedBtn.id] != section.id) {
+      section.classList.add('hidden');
+    } else {
+      section.classList.remove('hidden');
+    }
+  }
+}
+
 //handles every button press
 function buttonHandler(e) {
   const btn = e.target;
@@ -810,6 +833,8 @@ function buttonHandler(e) {
     document.getElementById('settings').classList.toggle('hidden');
   } else if (id === 'settings-close') {
     document.getElementById('settings').classList.add('hidden');
+  } else if (btn.parentElement.parentElement.classList.contains('nav')) {
+    toggleSection(btn);
   }
 }
 
@@ -1230,7 +1255,9 @@ async function init() {
 
   setupMobile();
 
-  updateMenu()
+  updateMenu();
+
+  toggleSection(document.getElementById('general-toggle'));
   
   //generates the balls
   addBalls(config.ballGenCount);
