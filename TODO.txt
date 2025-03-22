@@ -12,10 +12,12 @@ choose color of ball generation and click
 color power
 freeze/slow power
 stationary abilities (can animate)
-have powers only affect certain colors
+have powers only affect certain colors and sizes
 link same settings in different powers
 link push and pull settings
 wall settings (collision, bounce multi, repulsion, size)
 playable character
 collision dampening (elasticity)
 change dropdowns
+make abilities seperate from generation
+make requirements better

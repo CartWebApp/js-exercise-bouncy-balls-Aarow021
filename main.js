@@ -26,19 +26,32 @@ class Game {
   constructor() {
     //configurable settings
     this.config = {
+      //misc
       enableMouse2: true,
+      currentMenu: 'general',
+      //general
       friction: 0,
       gravityX: 0,
       gravityY: 0,
+      collision: true,
       enableAbsorb: false,
       absorbThresh: 0, //min combined velocity to absorb
+      wallCollision: true,
+      wallCollisionType: 'inner',
+      wallDeletesBalls: false,
+      wallElasticity: 1,
+      //ball generation
       ballGenMinSize: 10,
       ballGenMaxSize: 20,
       ballGenSpeed: 0.5,
       ballGenCount: 100,
-      ballRandomColor: true,
-      ballColor: 'rgb(255,255,255)',
-      collision: true,
+      ballColorRandom: true,
+      ballColorR: 255,
+      ballColorG: 255,
+      ballColorB: 255,
+      //click abilities
+      mouse1: 'push', //command for left click
+      mouse2: 'pull', //command for right click
       clickGenerateCount: 1,
       clickGenerateSpeed: 1,
       deleteRadius: 10,
@@ -52,23 +65,24 @@ class Game {
       pullStrength: 1.5,
       pullRadius: 200,
       pullType: 'linear',
-      mouse1: 'push', //command for left click
-      mouse2: 'pull', //command for right click
-      currentMenu: 'general'
+      clickColorRadius: 10,
+      clickColorRandom: false,
+      clickColorR: 255,
+      clickColorG: 255,
+      clickColorB: 255,
     }
 
     //holds all the config elements and containers
     //ex: {'split-count': ConfigNumber}
     this.configDOM = {}
+    this.abilities = {}
   }
 }
 
 let game = new Game();
 let config = game.config;
 let configDOM = game.configDOM;
-//mouse click settings
-let abilities = {};
-let settings = {};
+let abilities = game.abilities;
 let currentSettings = {};
 let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star'];
 let pullTypes = pushTypes;
@@ -79,8 +93,7 @@ class Debug {
     this.queue = ['yoooooo']; //example element would be {'mouseX: 746'}
     this.container = document.getElementById('debug');
     this.output = this.container.querySelector('output');
-    this.disabled = false;
-    this.toggle();
+    this.disabled = true;
     // this.toggle();
   }
 
@@ -138,6 +151,18 @@ function hide(element) {
 //shows an element
 function show(element) {
   element.classList.remove('hidden');
+}
+
+//returns the object/value at the end of a key path
+//takes in an object and an array of strings(keys)
+function searchPath(origin, keys) {
+  let currentObject = origin;
+  for (let i = 0; i < keys.length; i++) {
+
+      currentObject = currentObject[keys[i]]
+
+  }
+  return currentObject;
 }
 
 //gives the distance between 2 points
@@ -261,7 +286,7 @@ class ConfigElement extends DOMElement {
     this.displayName = displayName;
     this.value = value;
     this.hidden = true;
-    this.bindedConfig = bindedConfig ?? this.id;
+    this.bindedConfig = bindedConfig ?? {parent: config, path: [this.id]};
     this.type = 'input';
     this.element = this.generateBase();
     configDOM[this.id] = this;
@@ -282,15 +307,25 @@ class ConfigElement extends DOMElement {
   }
   //binds config variable to the element value
   bindConfig(configName) {
-    this.bindedConfig = configName;
+    this.bindedConfig.name = configName;
   }
   //changes value and binded setting value
   setValue(newValue, overrideDOM=true) {
     this.value = newValue;
-    config[this.bindedConfig] = newValue;
+    this.setConfigValue(newValue)
     if (overrideDOM) {
       this.element.querySelector('input').value = this.value;
     }
+  }
+  //gets the binded config value
+  getConfigValue() {
+    return searchPath(this.bindedConfig.parent, this.bindedConfig.path);
+  }
+  //changes the binded configs value
+  setConfigValue(value) {
+    let copiedPath = [...this.bindedConfig.path];
+    let pathHead = copiedPath.pop();
+    searchPath(this.bindedConfig.parent, copiedPath)[pathHead] = value;
   }
 }
 
@@ -312,7 +347,7 @@ class ConfigNumber extends ConfigElement {
 
   setValue(newValue, overrideDOM=true) {
     this.value = newValue;
-    config[this.bindedConfig] = Number(newValue);
+    this.setConfigValue(Number(newValue));
     if (overrideDOM) {
       this.element.querySelector('input').value = this.value;
     }
@@ -356,7 +391,7 @@ class ConfigSlider extends ConfigElement {
 
   setValue(newValue, overrideDOM=true) {
     this.value = newValue;
-    config[this.bindedConfig] = Number(newValue);
+    this.setConfigValue(Number(newValue));
     if (overrideDOM) {
       this.element.querySelectorAll('input').forEach((input => {
         input.value = this.value;
@@ -387,7 +422,7 @@ class ConfigCheckbox extends ConfigElement {
 
   setValue(newValue, overrideDOM=true) {
     this.value = newValue;
-    config[this.bindedConfig] = newValue;
+    this.setConfigValue(newValue);
     if (overrideDOM) {
       this.element.querySelector('input').checked = newValue;
     }
@@ -418,7 +453,7 @@ class ConfigDropdown extends ConfigElement {
 
   setValue(newValue, overrideDOM=true) {
     this.value = newValue;
-    config[this.bindedConfig] = newValue;
+    this.setConfigValue(newValue);
     if (overrideDOM) {
       this.element.querySelector('select').value = newValue;
     }
@@ -574,6 +609,11 @@ class Ball {
     return Math.PI * this.radius ** 2
   }
 
+  //deletes this object
+  delete() {
+    balls.splice(balls.indexOf(this), 1);
+  }
+
   //sets the velocity of ball
   setVelocity(x, y) {
     this.velX = x;
@@ -630,9 +670,15 @@ class Ball {
     let smallerBall = ball2.mass <= this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
-    biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
-    biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
-    biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
+    if (config.ballColorRandom) {
+      biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
+      biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
+      biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
+    } else {
+      biggerBall.r = (biggerBall.r + smallerBall.r * massRatio) / (1 + massRatio);
+      biggerBall.g = (biggerBall.g + smallerBall.g * massRatio) / (1 + massRatio);
+      biggerBall.b = (biggerBall.b + smallerBall.b * massRatio) / (1 + massRatio);
+    }
     //momentum
     biggerBall.momentumX += smallerBall.momentumX;
     biggerBall.momentumY += smallerBall.momentumY;
@@ -690,24 +736,41 @@ class Ball {
 
   //calculates balls next position/vectors
   update() {
-    if ((this.x + this.radius) >= width) {
-      this.momentumX = -(this.momentumX);
-      this.x = width - this.radius;
-    }
+    if (config.wallCollision) {
+      let collided = false;
+      let offset;
+      let wallElasticity = config.wallElasticity;
+      if (config.wallCollisionType === 'inner') ( offset = this.radius )
+      else if (config.wallCollisionType === 'center') ( offset = 0 )
+      else if (config.wallCollisionType === 'outer') ( offset = -this.radius )
 
-    if ((this.x - this.radius) <= 0) {
-      this.momentumX = -(this.momentumX);
-      this.x = 0 + this.radius;
-    }
-
-    if ((this.y + this.radius) >= height) {
-      this.momentumY = -(this.momentumY);
-      this.y = height - this.radius;
-    }
-
-    if ((this.y - this.radius) <= 0) {
-      this.momentumY = -(this.momentumY);
-      this.y = 0 + this.radius;
+      if ((this.x + offset) >= width) {
+        this.momentumX = -(this.momentumX) * wallElasticity;
+        this.x = width - offset;
+        collided = true;
+      }
+  
+      if ((this.x - offset) <= 0) {
+        this.momentumX = -(this.momentumX) * wallElasticity;
+        this.x = 0 + offset;
+        collided = true;
+      }
+  
+      if ((this.y + offset) >= height) {
+        this.momentumY = -(this.momentumY) * wallElasticity;
+        this.y = height - offset;
+        collided = true;
+      }
+  
+      if ((this.y - offset) <= 0) {
+        this.momentumY = -(this.momentumY) * wallElasticity;
+        this.y = 0 + offset;
+        collided = true;
+      }
+      if (config.wallDeletesBalls && collided) {
+        this.delete();
+        return;
+      }
     }
 
     this.calcVelocity();
@@ -727,6 +790,10 @@ class Ball {
 
     this.x += this.velX;
     this.y += this.velY;
+
+    if (isNaN(this.x) || isNaN(this.y)) {
+      this.delete();
+    }
   }
   
   //splits a ball into 2 or more
@@ -787,11 +854,19 @@ function rgbStringToObject(str) {
 }
 
 //generates color based on config settings
-function generateColor() {
-  if (config.ballRandomColor) {
-    return [random(0,255), random(0,255), random(0,255)]
-  } else {
-    return rgbStringToObject(config.ballColor);
+function generateColor(source='generated') {
+  if (source === 'generated') {
+    if (config.ballColorRandom) {
+      return [random(0,255), random(0,255), random(0,255)]
+    } else {
+      return [config.ballColorR, config.ballColorG, config.ballColorB];
+    }
+  } else if (source === 'ability') {
+    if (config.clickColorRandom) {
+      return [random(0,255), random(0,255), random(0,255)]
+    } else {
+      return [config.clickColorR, config.clickColorG, config.clickColorB];
+    }
   }
 }
 
@@ -943,6 +1018,15 @@ function deleteBalls(x, y, radius) {
   })
 }
 
+//colors balls within a radius
+function colorBalls(x, y, radius, [r, g, b]) {
+  checkAllCollisions(x, y, radius, (ball) => {
+    ball.r = r;
+    ball.g = g;
+    ball.b = b;
+  })
+}
+
 //adds to velocity of an object
 function applyForce(object, forceX, forceY) {
   object.setVelocity(object.velX - forceX, object.velY - forceY)
@@ -1030,6 +1114,8 @@ function useAbility(ability, [x, y]) {
     pushBalls(x, y, config.pushRadius, config.pushStrength, config.pushType);
   } else if (ability === 'pull') {
     pullBalls(x, y, config.pullRadius, config.pullStrength, config.pullType);
+  } else if (ability === 'color') {
+    colorBalls(x, y, config.clickColorRadius, generateColor('ability'));
   } 
 }
 
@@ -1193,6 +1279,12 @@ function initAbilities() {
   abilities.split = new Ability('split', false);
   abilities.generate = new Ability('generate', false);
   abilities.delete = new Ability('delete', true, 5);
+  abilities.color = new Ability('color', true);
+}
+
+//sets whether an ability repeats
+function setAbilityRepeat(ability) {
+  ability
 }
 
 //creates input objects and populates settings menu 
@@ -1205,47 +1297,75 @@ function initInputs() {
   general.addChild(new ConfigCheckbox('collision', 'Collision', null, true));
   general.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [{n: 'collision', v: true}]));
   general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [{n: 'enableAbsorb', v: true}]));
-
+    //-walls
+  const wallContainer = new Container('wallContainer', 'Walls');
+  wallContainer.addChild(new ConfigCheckbox('wallCollision', 'Wall Collision', null, true));
+  wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [{n: 'wallCollision', v: true}]));
+  wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [{n: 'wallCollision', v: true}]));
+  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [{n: 'wallCollision', v: true}]));
+  general.addChild(wallContainer);
   //GENERATION
   const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [{n: 'currentMenu', v: 'generation'}]);
   generation.addChild(new ConfigNumber('ballGenCount', 'Count', null, 100, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMinSize', 'Min Size', null, 10, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMaxSize', 'Max Size', null, 20, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenSpeed', 'Speed', null, 0.5, 0, Infinity, .01));
-
+    //-color
+  const ballColorContainer = new Container('ballColorContainer', 'Color');
+  ballColorContainer.addChild(new ConfigCheckbox('ballColorRandom', 'Random Color', null, true));
+  ballColorContainer.addChild(new ConfigSlider('ballColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  generation.addChild(ballColorContainer);
   //ABILITIES
   const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [{n: 'currentMenu', v: 'abilities'}]);
   const availableAbilities = Object.values(abilities).map(a => a.name);
-  abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null, checkMouseValues));
-  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{n: 'enableMouse2', v: true}], checkMouseValues));
-  let abilityLayout = new LayoutContainer('abilityLayout');
-  //-push
-  let pushContainer = new Container('pushContainer', 'Push', null, [{n: 'mouse1', n2: 'mouse2', v: 'push'}]);
+  abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null));
+  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{n: 'enableMouse2', v: true}]));
+  const abilityLayout = new LayoutContainer('abilityLayout');
+    //-push
+  const pushContainer = new Container('pushContainer', 'Push', null, [{n: 'mouse1', n2: 'mouse2', v: 'push'}]);
   pushContainer.addChild(new ConfigDropdown('pushMode', 'Push Mode', null, 'default', ['default', 'inverted']));
   pushContainer.addChild(new ConfigDropdown('pushType', 'Push Type', null, 'linear', pushTypes)); 
   pushContainer.addChild(new ConfigNumber('pushStrength', 'Push Strength', null, 1.5, 0, Infinity, .01));
   pushContainer.addChild(new ConfigNumber('pushRadius', 'Push Radius', null, 1.5, 0, Infinity, .01));
+  pushContainer.addChild(new ConfigNumber('pushInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['push', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(pushContainer);
-  //-pull
-  let pullContainer = new Container('pullContainer', 'Pull', null, [{n: 'mouse1', n2: 'mouse2', v: 'pull'}]);
+    //-pull
+  const pullContainer = new Container('pullContainer', 'Pull', null, [{n: 'mouse1', n2: 'mouse2', v: 'pull'}]);
   pullContainer.addChild(new ConfigDropdown('pullMode', 'Pull Mode', null, 'default', ['default', 'inverted']));
   pullContainer.addChild(new ConfigDropdown('pullType', 'Pull Type', null, 'linear', pullTypes)); 
   pullContainer.addChild(new ConfigNumber('pullStrength', 'Pull Strength', null, 1.5, 0, Infinity, .01));
   pullContainer.addChild(new ConfigNumber('pullRadius', 'Pull Radius', null, 1.5, 0, Infinity, .01));
+  pullContainer.addChild(new ConfigNumber('pullInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['pull', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(pullContainer);
-  //-split
-  let splitContainer = new Container('splitContainer', 'Split', null, [{n: 'mouse1', n2: 'mouse2', v: 'split'}]);
+    //-split
+  const splitContainer = new Container('splitContainer', 'Split', null, [{n: 'mouse1', n2: 'mouse2', v: 'split'}]);
   splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', null, 2, 2, Infinity, 1));
   splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', null, 1, 0, Infinity, .01));
+  splitContainer.addChild(new ConfigCheckbox('splitRepeats', 'Repeats', {parent: abilities, path: ['split', 'repeats']}, false));
+  splitContainer.addChild(new ConfigNumber('splitInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['split', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(splitContainer);
-  //-generate
-  let generateContainer = new Container('generateContainer', 'Generate', null, [{n: 'mouse1', n2: 'mouse2', v: 'generate'}]);
+    //-generate
+  const generateContainer = new Container('generateContainer', 'Generate', null, [{n: 'mouse1', n2: 'mouse2', v: 'generate'}]);
   generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', null, 2, 1, Infinity, 1));
   generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', null, 1, 0, Infinity, .01));
+  generateContainer.addChild(new ConfigCheckbox('generateRepeats', 'Repeats', {parent: abilities, path: ['generate', 'repeats']}, false));
+  generateContainer.addChild(new ConfigNumber('generateInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['generate', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(generateContainer);
-  let deleteContainer = new Container('deleteContainer', 'Delete', null, [{n: 'mouse1', n2: 'mouse2', v: 'delete'}]);
+    //-delete
+  const deleteContainer = new Container('deleteContainer', 'Delete', null, [{n: 'mouse1', n2: 'mouse2', v: 'delete'}]);
   deleteContainer.addChild(new ConfigNumber('deleteRadius', 'Delete Radius', null, 10, 0, Infinity, 1));
   abilityLayout.addChild(deleteContainer);
+    //-color
+  const colorContainer = new Container('colorContainer', 'Color', null, [{n: 'mouse1', n2: 'mouse2', v: 'color'}]);
+  colorContainer.addChild(new ConfigNumber('clickColorRadius', 'Color Radius', null, 10, 0, Infinity, 1));
+  colorContainer.addChild(new ConfigCheckbox('clickColorRandom', 'Random Color', null, true));
+  colorContainer.addChild(new ConfigSlider('clickColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
+  colorContainer.addChild(new ConfigSlider('clickColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
+  colorContainer.addChild(new ConfigSlider('clickColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
+  colorContainer.addChild(new ConfigNumber('colorInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['color', 'interval']}, 50, 0, Infinity, 1));
+  abilityLayout.addChild(colorContainer);
   abilitiesContainer.addChild(abilityLayout);
 
   const settingsContainer = document.querySelector('.settings-col');
@@ -1258,7 +1378,7 @@ function initInputs() {
 
   for (const object of Object.values(configDOM)) {
     if (object.type === 'input') {
-      object.setValue(config[object.bindedConfig]);
+      object.setValue(object.getConfigValue());
     }
   }
 }
