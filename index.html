@@ -37,172 +37,34 @@
       </nav>
       <section id="settings" class="hidden">
         <div class="settings-heading">
-          <h2>Settings</h2>
+          <div class="nav" id="settings-nav">
+            <div class="icon-wrap">
+              <button type="button" id="general-toggle" class="active"></button>
+            </div>
+            <div class="icon-wrap">
+              <button type="button" id="generation-toggle"></button>
+            </div>
+            <div class="icon-wrap">
+              <button type="button" id="abilities-toggle"></button>
+            </div>
+          </div>
           <div class="icon-wrap">
             <button type="button" id="settings-close"></button>
           </div>
         </div>
         <div class="overflow-auto">
           <div class="settings-col">
-
-            <h3>General</h3>
-            <div class="settings-row">
-              <label for="gravity-y-input-number">Gravity-Y</label>
-              <div class="slider-row">
-                <input type="number" id="gravity-y-input" value="0" step=".001">
-                <input type="range" id="gravity-y-input-slider" min="-1" max="1" step=".02" value="0">
-              </div>
-            </div>
-            <div class="settings-row">
-              <label for="gravity-x-input-number">Gravity-X</label>
-              <div class="slider-row">
-                <input type="number" id="gravity-x-input" value="0" step=".001">
-                <input type="range" id="gravity-x-input-slider" min="-1" max="1" step=".02" value="0">
-              </div>
-            </div>
-            <div class="settings-row">
-              <label for="friction-input-number">Friction</label>
-              <div class="slider-row">
-                <input type="number" id="friction-input" step=".0001" value="0">
-                <input type="range" id="friction-input-slider" min="0" max="1" step=".0001" value="0">
-              </div>
-            </div>
-            <div class="settings-row checkbox-row">
-              <label for="collision-input" >Collision</label>
-              <div class="checkbox-container">
-                <input type="checkbox" id="collision-input" checked>
-                <span class="checkmark"></span>
-              </div>
-            </div>
-            <div class="settings-row checkbox-row">
-              <label for="absorption-input" >Absorption</label>
-              <div class="checkbox-container">
-                <input type="checkbox" id="absorption-input">
-                <span class="checkmark"></span>
-              </div>
-            </div>
-            <div class="settings-row input-row">
-              <label for="absorption-threshold-input">Absorption Resistance</label>
-              <input type="number" id="absorption-threshold-input" min="0" value="0">
-            </div>
-            <hr>
-            <h3>Ball Generation</h3>
-            <div class="settings-row input-row">
-              <label for="ballcount-input">Count</label>
-              <input type="number" id="ballcount-input" min="0" step="1" value="100">
-            </div>
-            <div class="settings-row input-row">
-              <label for="min-size-input">Min Size</label>
-              <input type="number" id="min-size-input" value="10" step="1">
-            </div>
-            <div class="settings-row input-row">
-              <label for="max-size-input">Max Size</label>
-              <input type="number" id="max-size-input" value="20" step="1">
-            </div>
-            <div class="settings-row input-row">
-              <label for="max-speed-input">Max Speed</label>
-              <input type="number" id="max-speed-input" min="0" value=".5"  step=".1">
-            </div>
-            <hr>
-            <h3>Abilities</h3>
-            <div class="settings-row dropdown-row">
-              <label for="max-speed-input">Mouse 1</label>
-              <select id="mouse1-input">
-                <option value="none">None</option>
-                <option value="push" selected="selected">Push</option>
-                <option value="pull">Pull</option>
-                <option value="generate">Generate</option>
-                <option value="split">Split</option>
-                <option value="delete">Delete</option>
-              </select>
-            </div>
-            <div class="settings-row dropdown-row">
-              <label for="max-speed-input">Mouse 2</label>
-              <select id="mouse2-input">
-                <option value="none">None</option>
-                <option value="push">Push</option>
-                <option value="pull" selected="selected">Pull</option>
-                <option value="generate">Generate</option>
-                <option value="split">Split</option>
-                <option value="delete">Delete</option>
-              </select>
-            </div>
-            <div class="settings-row input-row">
-              <label for="generate-count-input">Generate Count</label>
-              <input type="number" id="generate-count-input" min="0" value="1"  step="1">
-            </div>
-            <div class="settings-row input-row">
-              <label for="generate-speed-input">Generate Speed</label>
-              <input type="number" id="generate-speed-input" value="1"  step=".1">
-            </div>
-            <div class="settings-row input-row">
-              <label for="delete-radius-input">Delete Size</label>
-              <input type="number" id="delete-radius-input" min="0" value="10"  step="1">
-            </div>
-            <div class="settings-row input-row">
-              <label for="split-count-input">Split Count</label>
-              <input type="number" id="split-count-input" min="1" value="2"  step="1">
-            </div>
-            <div class="settings-row input-row">
-              <label for="split-speed-input">Split Speed</label>
-              <input type="number" id="split-speed-input" value="1"  step=".01">
-            </div>
-            <div class="settings-row dropdown-row">
-              <label for="push-mode-input">Push Mode</label>
-              <select id="push-mode-input">
-                <option value="default" selected="selected">Default</option>
-                <option value="inverted">Inverted</option>
-              </select>
-            </div>
-            <div class="settings-row dropdown-row">
-              <label for="push-type-input">Push Type</label>
-              <select id="push-type-input">
-                <option value="linear" selected="selected">Linear</option>
-                <option value="constant">Constant</option>
-                <option value="cross1">Cross 1</option>
-                <option value="cross2">Cross 2</option>
-                <option value="cross3">Cross 3</option>
-                <option value="cross4">Cross 4</option>
-                <option value="test">Test</option>
-              </select>
-            </div>
-            <div class="settings-row input-row">
-              <label for="push-strength-input">Push Strength</label>
-              <input type="number" id="push-strength-input" value="1.5"  step=".01">
-            </div>
-            <div class="settings-row input-row">
-              <label for="push-radius-input">Push Radius</label>
-              <input type="number" id="push-radius-input" value="200"  step="1">
-            </div>
-            <div class="settings-row dropdown-row">
-              <label for="pull-mode-input">Pull Mode</label>
-              <select id="pull-mode-input">
-                <option value="default" selected="selected">Default</option>
-                <option value="inverted">Inverted</option>
-              </select>
-            </div>
-            <div class="settings-row dropdown-row">
-              <label for="pull-type-input">Pull Type</label>
-              <select id="pull-type-input">
-                <option value="linear" selected="selected">Linear</option>
-                <option value="constant">Constant</option>
-                <option value="cross1">Cross 1</option>
-                <option value="cross2">Cross 2</option>
-                <option value="cross3">Cross 3</option>
-                <option value="cross4">Cross 4</option>
-                <option value="test">Test</option>
-              </select>
-            </div>
-            <div class="settings-row input-row">
-              <label for="pull-strength-input">Pull Strength</label>
-              <input type="number" id="pull-strength-input" value="1.5"  step=".01">
-            </div>
-            <div class="settings-row input-row">
-              <label for="pull-radius-input">Pull Radius</label>
-              <input type="number" id="pull-radius-input" value="200"  step="1">
-            </div>
+          
           </div>
         </div>
+      </section>
+      <section id="debug" class="hidden">
+        <h2>DEBUG</h2>
+        <p>F9 to close</p>
+        <output>
+
+        </output>
+        <!--Generated logs-->
       </section>
     </div>
     <script src="main.js"></script>

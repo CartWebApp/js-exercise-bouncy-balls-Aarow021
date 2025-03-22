@@ -1,50 +1,136 @@
 // setup canvas
 
 const canvas = document.querySelector('canvas');
-const ctx = canvas.getContext('2d');
+const hiddenCanvas = document.createElement("canvas");
+const ctx = hiddenCanvas.getContext("2d");
+const visibleCtx = canvas.getContext("2d");
 const pageWrapper = document.getElementById('page-wrapper');
 
-let width = canvas.width = pageWrapper.clientWidth;
-let height = canvas.height = pageWrapper.clientHeight;
+let width = canvas.width = hiddenCanvas.width  = pageWrapper.clientWidth;
+let height = canvas.height = hiddenCanvas.height = pageWrapper.clientHeight;
 
 let balls = [];
-let requestId;
-let playing = true;
+let requestId; //animationRequest
+let playing = true; //pause/play
 let mouseX = 0;
 let mouseY = 0;
 let mouse1Down = false;
 let mouse2Down = false;
 let touchesList = [];
+let lastTime = 0;
+let deltaTime = 0;
+let fps = 0;
 
-//configurable settings
-let friction = 0;
-let gravityX = 0;
-let gravityY = 0;
-let enableAbsorb = false;
-let absorbThresh = 0;   //min combined velocity to absorb
-let minSize = 10;
-let maxSize = 20;
-let maxSpeed = .5;
-let ballCount = 100;
-let collision = true;
-//mouse click settings
-let abilities = {};
-let mouse1 = 'push'; //command for left click
-let mouse2 = 'pull'; //command for right click
-let clickGenerateCount = 1;
-let clickGenerateSpeed = 1;
-let deleteRadius = 1;
-let splitCount = 2;
-let splitSpeed = 1;
-let pushStrength = 1.5;
-let pushRadius = 200;
-let pushMode = 'default';
-let pushType = 'linear';
-let pullMode = 'default';
-let pullStrength = 1.5;
-let pullRadius = 200;
-let pullType = 'linear';
+//holds all game data (configs, ect)
+class Game {
+  constructor() {
+    //configurable settings
+    this.config = {
+      //misc
+      enableMouse2: true,
+      currentMenu: 'general',
+      //general
+      friction: 0,
+      gravityX: 0,
+      gravityY: 0,
+      collision: true,
+      enableAbsorb: false,
+      absorbThresh: 0, //min combined velocity to absorb
+      wallCollision: true,
+      wallCollisionType: 'inner',
+      wallDeletesBalls: false,
+      wallElasticity: 1,
+      //ball generation
+      ballGenMinSize: 10,
+      ballGenMaxSize: 20,
+      ballGenSpeed: 0.5,
+      ballGenCount: 100,
+      ballColorRandom: true,
+      ballColorR: 255,
+      ballColorG: 255,
+      ballColorB: 255,
+      //click abilities
+      mouse1: 'push', //command for left click
+      mouse2: 'pull', //command for right click
+      clickGenerateCount: 1,
+      clickGenerateSpeed: 1,
+      deleteRadius: 10,
+      splitCount: 2,
+      splitSpeed: 1,
+      pushMode: 'default',
+      pushStrength: 1.5,
+      pushRadius: 150,
+      pushType: 'linear',
+      pullMode: 'default',
+      pullStrength: 1.5,
+      pullRadius: 200,
+      pullType: 'linear',
+      clickColorRadius: 10,
+      clickColorRandom: false,
+      clickColorR: 255,
+      clickColorG: 255,
+      clickColorB: 255,
+    }
 
+    //holds all the config elements and containers
+    //ex: {'split-count': ConfigNumber}
+    this.configDOM = {}
+    this.abilities = {}
+  }
+}
+
+let game = new Game();
+let config = game.config;
+let configDOM = game.configDOM;
+let abilities = game.abilities;
+let currentSettings = {};
+let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star'];
+let pullTypes = pushTypes;
+
+//debug menu
+class Debug {
+  constructor() {
+    this.queue = ['yoooooo']; //example element would be {'mouseX: 746'}
+    this.container = document.getElementById('debug');
+    this.output = this.container.querySelector('output');
+    this.disabled = true;
+    // this.toggle();
+  }
+
+  getTouchPositions() {
+    for (const touch of touchesList) {
+      if (!touch) { continue }
+      this.queue.push(`Touch-${touch.id}-X: ${touch.x}`);
+      this.queue.push(`Touch-${touch.id}-Y: ${touch.y}`);
+    }
+  }
+
+  getFPS() {
+    fps = Math.round(1000 / deltaTime);
+    this.queue.push(fps)
+  }
+
+  printQueue() {
+    if (!this.disabled) {
+      this.output.innerHTML = '';
+      for (const line of this.queue) {
+        let row = document.createElement('p')
+        row.textContent = line;
+        this.output.appendChild(row);
+      }
+      this.queue = [];
+    }
+  }
+
+  clearQueue() {
+    this.queue = [];
+  }
+
+  toggle() {
+    this.disabled = this.container.classList.toggle('hidden');
+  }
+}
+let debug = new Debug();
 
 //function to generate random number
 function random(min, max) {
@@ -65,6 +151,18 @@ function hide(element) {
 //shows an element
 function show(element) {
   element.classList.remove('hidden');
+}
+
+//returns the object/value at the end of a key path
+//takes in an object and an array of strings(keys)
+function searchPath(origin, keys) {
+  let currentObject = origin;
+  for (let i = 0; i < keys.length; i++) {
+
+      currentObject = currentObject[keys[i]]
+
+  }
+  return currentObject;
 }
 
 //gives the distance between 2 points
@@ -134,6 +232,341 @@ function rotateVector(x, y, degrees, center=[0,0]) {
   return { x: finalX, y: finalY };
 }
 
+class DOMElement {
+  constructor(id, tag, requirements, action) {
+    this.id = id;
+    this.tag = tag ?? 'div';
+    this.hidden = false;
+    this.element;
+    this.parent;
+    this.requirements = requirements ?? [];
+    this.type;
+    this.action = action;
+  }
+
+  //generates the innerHTML for the element
+  generateInner() {}
+  //generates the base element (no innerHTML)
+  generateBase() {
+    let element = document.createElement(this.tag);
+    return element;
+  }
+  //adds event listeners to the element
+  addEventListeners() {}
+  //hides the element
+  hide() {
+    this.element.classList.add('hidden');
+  }
+  //shows the element
+  show() {
+    this.element.classList.remove('hidden');
+  }
+  //gets the DOM element for this input
+  getElement() {
+    return document.getElementById(this.id);
+  }
+  //hides if any requirement is not met, shows otherwise
+  checkRequirements() {
+    for (const requirement of this.requirements) {
+      let n2 = config[requirement.n2];
+      if (config[requirement.n] != requirement.v && n2 != requirement.v) {
+        this.hide();
+        return;
+      }
+    }
+    this.show();
+  }
+}
+
+//base class for inputs
+class ConfigElement extends DOMElement {
+  constructor(id, inputType, displayName, bindedConfig, value, requirements, action) {
+    super(id, 'div', requirements, action)
+    this.inputType = inputType;
+    this.displayName = displayName;
+    this.value = value;
+    this.hidden = true;
+    this.bindedConfig = bindedConfig ?? {parent: config, path: [this.id]};
+    this.type = 'input';
+    this.element = this.generateBase();
+    configDOM[this.id] = this;
+
+  }
+
+  //generates the base element (no innerHTML)
+  generateBase() {
+    let element = document.createElement('div');
+    element.inputType = this.inputType;
+    element.classList.add('settings-row');
+    element.classList.add('hidden');
+    element.classList.add(`${this.inputType}-row`);
+    return element;
+  }
+  addEventListeners() {
+    this.element.querySelector('input').addEventListener('input', inputHandler);
+  }
+  //binds config variable to the element value
+  bindConfig(configName) {
+    this.bindedConfig.name = configName;
+  }
+  //changes value and binded setting value
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    this.setConfigValue(newValue)
+    if (overrideDOM) {
+      this.element.querySelector('input').value = this.value;
+    }
+  }
+  //gets the binded config value
+  getConfigValue() {
+    return searchPath(this.bindedConfig.parent, this.bindedConfig.path);
+  }
+  //changes the binded configs value
+  setConfigValue(value) {
+    let copiedPath = [...this.bindedConfig.path];
+    let pathHead = copiedPath.pop();
+    searchPath(this.bindedConfig.parent, copiedPath)[pathHead] = value;
+  }
+}
+
+//class for number inputs
+class ConfigNumber extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, min, max, step, requirements, action) {
+    super(id, 'number', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.min = min ?? -Infinity;
+    this.max = max ?? -Infinity;
+    this.step = step ?? 1;
+    this.generateInner();
+  }
+
+  generateInner() {
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <input type="number" id="${this.id}-input" value="${this.value}" min="${this.min}" max="${this.max}" step="${this.step}">`
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    this.setConfigValue(Number(newValue));
+    if (overrideDOM) {
+      this.element.querySelector('input').value = this.value;
+    }
+  }
+}
+
+//class for number inputs
+class ConfigSlider extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, min, max, step, sliderMin, sliderMax, sliderStep, requirements, action) {
+    super(id, 'slider', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.min = min ?? -Infinity;
+    this.max = max ?? -Infinity;
+    this.step = step ?? 1;
+    this.sliderMin = sliderMin ?? this.min;
+    this.sliderMax = sliderMax ?? this.max;
+    this.sliderStep = sliderStep ?? this.step;
+    this.generateInner();
+  }
+
+  generateInner() {
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <div class="slider-container">
+        <input type="number" id="${this.id}-input" value="${this.value}" min="${this.min}" max="${this.max}" step="${this.step}">
+        <input type="range" id="${this.id}-input-slider" value="${this.value}" min="${this.sliderMin}" max="${this.sliderMax}" step="${this.sliderStep}">
+      </div>`
+  } 
+
+  addEventListeners() {
+    const numInput = this.element.querySelector('input[type=number]');
+    const slider = this.element.querySelector('input[type=range]');
+    numInput.addEventListener('input', (e) => {
+      slider.value = numInput.value;
+      inputHandler(e);
+    })
+    slider.addEventListener('input', (e) => {
+      numInput.value = slider.value;
+      inputHandler(e);
+    })
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    this.setConfigValue(Number(newValue));
+    if (overrideDOM) {
+      this.element.querySelectorAll('input').forEach((input => {
+        input.value = this.value;
+      }))
+    }
+  }
+}
+
+//class for number inputs
+class ConfigCheckbox extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, requirements, action) {
+    super(id, 'checkbox', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.generateInner();
+  }
+
+  generateInner() {
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <div class="checkbox-container">
+        <input type="checkbox" id="${this.id}-input" checked="${this.value}">
+        <span class="checkmark"></span>
+      </div>`;
+  }
+
+  addEventListeners() {
+    this.element.querySelector('input').addEventListener('input', inputHandler);
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    this.setConfigValue(newValue);
+    if (overrideDOM) {
+      this.element.querySelector('input').checked = newValue;
+    }
+  }
+}
+
+//class for number inputs
+class ConfigDropdown extends ConfigElement {
+  constructor(id, displayName, bindedConfig, value, options, requirements, action) {
+    super(id, 'dropdown', displayName, bindedConfig, value ?? 0, requirements, action);
+    this.options = options;
+    this.generateInner();
+  }
+
+  generateInner() {
+    let optionsHTML = '';
+    for (const option of this.options) {
+      optionsHTML += `<option value="${option}">${option}</option>`
+    }
+    this.element.innerHTML = `
+      <label for="${this.id}-input">${this.displayName}</label>
+      <select id="${this.id}-input">${optionsHTML}</select>`
+  }
+
+  addEventListeners() {
+    this.element.querySelector('select').addEventListener('input', inputHandler);
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    this.value = newValue;
+    this.setConfigValue(newValue);
+    if (overrideDOM) {
+      this.element.querySelector('select').value = newValue;
+    }
+  }
+}
+
+//container for config
+class Container extends DOMElement {
+  constructor(id, displayName, children, requirements, action) {
+    super(id, 'div', requirements, action);
+    this.type = 'container';
+    this.displayName = displayName ?? '';
+    this.children = children ?? [];
+    this.layer = -1;
+    this.element = this.generateBase();
+    this.generateInner();
+    for (const child of this.children) {
+      this.bindChild(child)
+    }
+    configDOM[this.id] = this;
+  }
+
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.id = `${this.id}-section`;
+    element.classList.add('settings-section');
+    element.classList.add('hidden');
+    return element;
+  }
+
+  generateInner() {
+    this.element.innerHTML = `<h3>${this.displayName}</h3>`
+  }
+
+  //adds child to element
+  bindChild(child) {
+    if (child.parent && child.parent != this) {
+      child.parent.removeChild(child);
+    }
+    this.element.appendChild(child.element);
+    child.parent = this;
+    child.layer = this.layer + 1;
+  }
+
+  //adds child to object and binds
+  addChild(newChild) {
+    this.children.push(newChild);
+    this.bindChild(newChild);
+  }
+
+  //removes child from element and object
+  removeChild(child) {
+    this.element.querySelector(`.settings-row:has(#${child.id}-input)`).remove();
+    this.children.splice(this.children.indexOf(child), 1);
+  }
+
+  addEventListeners() {
+    for (const child of this.children) {
+      child.addEventListeners();
+    }
+  }
+}
+
+//class for main categories
+class MainContainer extends Container {
+  constructor(id, displayName, children, requirements) {
+    super(id, displayName, children, requirements);
+    this.layer = 1;
+  }
+
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.id = `${this.id}-section`;
+    element.classList.add('settings-section-main');
+    element.classList.add('hidden');
+    return element;
+  }
+  generateInner() {
+    this.element.innerHTML = `<h2>${this.displayName}</h2>`
+  }
+}
+
+class LayoutContainer extends Container {
+  constructor(id, children, requirements) {
+    super(id, '', children, requirements);
+  }
+
+  generateBase() {
+    let element = document.createElement('div');
+    element.type = this.type;
+    element.id = `${this.id}-section-layout`;
+    element.classList.add('settings-layout');
+    element.classList.add('hidden');
+    return element;
+  }
+
+  generateInner() {
+    this.element.innerHTML = ``;
+  }
+
+  //adds child to element
+  bindChild(child) {
+    if (child.parent && child.parent != this) {
+      child.parent.removeChild(child);
+    }
+    this.element.appendChild(child.element);
+    child.parent = this;
+    child.layer = this.layer;
+  }
+}
+
 //base class for abilities
 class Ability {
   constructor(name, repeats, interval=20) {
@@ -166,7 +599,7 @@ class Ball {
   //draws
   draw() {
     ctx.beginPath();
-    ctx.fillStyle = `rgb(${this.r}, ${this.g}, ${this.b}`;
+    ctx.fillStyle = `rgb(${~~this.r}, ${~~this.g}, ${~~this.b}`;
     ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
     ctx.fill();
   }
@@ -174,6 +607,11 @@ class Ball {
   //gets area of ball
   getArea() {
     return Math.PI * this.radius ** 2
+  }
+
+  //deletes this object
+  delete() {
+    balls.splice(balls.indexOf(this), 1);
   }
 
   //sets the velocity of ball
@@ -232,9 +670,15 @@ class Ball {
     let smallerBall = ball2.mass <= this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
-    biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
-    biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
-    biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
+    if (config.ballColorRandom) {
+      biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
+      biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
+      biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
+    } else {
+      biggerBall.r = (biggerBall.r + smallerBall.r * massRatio) / (1 + massRatio);
+      biggerBall.g = (biggerBall.g + smallerBall.g * massRatio) / (1 + massRatio);
+      biggerBall.b = (biggerBall.b + smallerBall.b * massRatio) / (1 + massRatio);
+    }
     //momentum
     biggerBall.momentumX += smallerBall.momentumX;
     biggerBall.momentumY += smallerBall.momentumY;
@@ -274,19 +718,17 @@ class Ball {
 
   //handles ball collision checking and actions
   collisionDetect() {
-    if (!collision) { return }
+    if (!config.collision) { return }
     for (let j = 0; j < balls.length; j++) {
-      if (!(this === balls[j])) {
-        const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
-
-        //collision condition
-        if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
-          //If the velocity between the two are great enough
-          if (enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > absorbThresh) {
-            this.fuse(balls[j])
-          } else {
-            this.bounce(balls[j])
-          }
+      if (this === balls[j]) { continue };
+      const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
+      //collision condition
+      if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
+        //If the velocity between the two are great enough
+        if (config.enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > config.absorbThresh) {
+          this.fuse(balls[j])
+        } else {
+          this.bounce(balls[j])
         }
       }
     }
@@ -294,32 +736,49 @@ class Ball {
 
   //calculates balls next position/vectors
   update() {
-    if ((this.x + this.radius) >= width) {
-      this.momentumX = -(this.momentumX);
-      this.x = width - this.radius;
-    }
+    if (config.wallCollision) {
+      let collided = false;
+      let offset;
+      let wallElasticity = config.wallElasticity;
+      if (config.wallCollisionType === 'inner') ( offset = this.radius )
+      else if (config.wallCollisionType === 'center') ( offset = 0 )
+      else if (config.wallCollisionType === 'outer') ( offset = -this.radius )
 
-    if ((this.x - this.radius) <= 0) {
-      this.momentumX = -(this.momentumX);
-      this.x = 0 + this.radius;
-    }
-
-    if ((this.y + this.radius) >= height) {
-      this.momentumY = -(this.momentumY);
-      this.y = height - this.radius;
-    }
-
-    if ((this.y - this.radius) <= 0) {
-      this.momentumY = -(this.momentumY);
-      this.y = 0 + this.radius;
+      if ((this.x + offset) >= width) {
+        this.momentumX = -(this.momentumX) * wallElasticity;
+        this.x = width - offset;
+        collided = true;
+      }
+  
+      if ((this.x - offset) <= 0) {
+        this.momentumX = -(this.momentumX) * wallElasticity;
+        this.x = 0 + offset;
+        collided = true;
+      }
+  
+      if ((this.y + offset) >= height) {
+        this.momentumY = -(this.momentumY) * wallElasticity;
+        this.y = height - offset;
+        collided = true;
+      }
+  
+      if ((this.y - offset) <= 0) {
+        this.momentumY = -(this.momentumY) * wallElasticity;
+        this.y = 0 + offset;
+        collided = true;
+      }
+      if (config.wallDeletesBalls && collided) {
+        this.delete();
+        return;
+      }
     }
 
     this.calcVelocity();
-
+    let friction = config.friction;
     this.momentumX *= 1 - friction;
     this.momentumY *= 1 - friction;
-    this.momentumX += gravityX * this.mass;
-    this.momentumY += gravityY * this.mass;
+    this.momentumX += config.gravityX * this.mass;
+    this.momentumY += config.gravityY * this.mass;
 
     this.calcVelocity();
     if (Math.abs(this.velX) < .01 && friction > 0) {
@@ -331,11 +790,16 @@ class Ball {
 
     this.x += this.velX;
     this.y += this.velY;
+
+    if (isNaN(this.x) || isNaN(this.y)) {
+      this.delete();
+    }
   }
   
   //splits a ball into 2 or more
   split(splits) {
     let randomDeg = random(0, 360);
+    let splitSpeed = config.splitSpeed;
     for (let i = 0; i < splits; i++) {
       let newVelocity = rotateVector(
         1 * splitSpeed,
@@ -358,24 +822,59 @@ class Ball {
 }
 
 //main animation loop
-function loop() {
+function loop(currentTime) {
+  deltaTime = currentTime - lastTime;
+  lastTime = currentTime;
+
   ctx.fillStyle = 'rgba(0, 0, 0, 1)';
   ctx.fillRect(0, 0, width, height);
-
   for (let i = 0; i < balls.length; i++) {
-    balls[i].draw();
-    balls[i].update();
-    balls[i].collisionDetect();
+    balls[i]?.update();
+    balls[i]?.collisionDetect();
+    balls[i]?.draw();
+    
   }
 
+  visibleCtx.drawImage(hiddenCanvas, 0, 0);
+
   requestId = requestAnimationFrame(loop);
+
+  // debug.getTouchPositions();
+  debug.getFPS();
+  debug.printQueue();
+}
+
+//converts a string of the form 'rgb(0,0,0) 
+//into an array [r, g, b]'
+function rgbStringToObject(str) {
+  const startIndex = str.indexOf('(') + 1;
+  const endIndex = str.indexOf(')');
+  const rgbValues = str.substring(startIndex, endIndex).split(',').map(Number);
+  return rgbValues;
+}
+
+//generates color based on config settings
+function generateColor(source='generated') {
+  if (source === 'generated') {
+    if (config.ballColorRandom) {
+      return [random(0,255), random(0,255), random(0,255)]
+    } else {
+      return [config.ballColorR, config.ballColorG, config.ballColorB];
+    }
+  } else if (source === 'ability') {
+    if (config.clickColorRandom) {
+      return [random(0,255), random(0,255), random(0,255)]
+    } else {
+      return [config.clickColorR, config.clickColorG, config.clickColorB];
+    }
+  }
 }
 
 //populates screen with balls
-function addBalls(num, size, x, y, speed, vx, vy) {
+function addBalls(num, size, x, y, speed, vx, vy, color) {
   for (let i = 0; i < num; i++) {
-    let radius = size || random(minSize, maxSize);
-    let newSpeed = speed ?? maxSpeed
+    let radius = size || random(config.ballGenMinSize, config.ballGenMaxSize);
+    let newSpeed = speed ?? config.ballGenSpeed;
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
@@ -383,7 +882,7 @@ function addBalls(num, size, x, y, speed, vx, vy) {
       y ?? random(0 + radius,height - radius),
       vx ?? random(-newSpeed * 100,newSpeed * 100) / 100,
       vy ?? random(-newSpeed * 100,newSpeed * 100) / 100,
-      [random(0,255), random(0,255), random(0,255)],
+      color ?? generateColor(),
       radius
     );
   
@@ -404,6 +903,21 @@ function startCanvas() {
   requestAnimationFrame(loop);
 }
 
+//toggles a settings menu main section
+function selectSection(category, containerID='settings-nav') {
+  let container = document.getElementById(containerID);
+  let buttonID = category + '-toggle';
+  for (let button of container.querySelectorAll('button')) {
+    if (button.id != buttonID) {
+      button.classList.remove('active');
+    } else {
+      button.classList.add('active');
+    }
+  }
+  config.currentMenu = category;
+  updateMenu();
+}
+
 //handles every button press
 function buttonHandler(e) {
   const btn = e.target;
@@ -416,183 +930,41 @@ function buttonHandler(e) {
     startCanvas();
   } else if (id === 'reset') {
     balls = [];
-    addBalls(ballCount);
+    addBalls(config.ballGenCount);
   } else if (id === 'settings-toggle') {
     document.getElementById('settings').classList.toggle('hidden');
   } else if (id === 'settings-close') {
     document.getElementById('settings').classList.add('hidden');
+  } else if (btn.parentElement.parentElement.classList.contains('nav')) {
+    selectSection(btn.id.substring(0, btn.id.indexOf('-')));
+  }
+  if (btn.classList.contains('test-icon')) {
+    btn.classList.add('active')
   }
 }
 
 //updates the elements in menu; some may need to be hidden, others shown
 function updateMenu() {
-  if (enableAbsorb === true) {
-    show(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-  }
-  if (collision === true) {
-    show(document.querySelector('.settings-row:has(#absorption-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#absorption-input)'));
-    hide(document.querySelector('.settings-row:has(#absorption-threshold-input)'));
-  }
-
-  if (mouse1 === 'generate' || mouse2 === 'generate') {
-    show(document.querySelector('.settings-row:has(#generate-count-input)'));
-    show(document.querySelector('.settings-row:has(#generate-speed-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#generate-count-input)'));
-    hide(document.querySelector('.settings-row:has(#generate-speed-input)'));
-  }
-  if (mouse1 === 'delete' || mouse2 === 'delete') {
-    show(document.querySelector('.settings-row:has(#delete-radius-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#delete-radius-input)'));
-  }
-  if (mouse1 === 'split' || mouse2 === 'split') {
-    show(document.querySelector('.settings-row:has(#split-count-input)'));
-    show(document.querySelector('.settings-row:has(#split-speed-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#split-count-input)'));
-    hide(document.querySelector('.settings-row:has(#split-speed-input)'));
-  }
-  if (mouse1 === 'push' || mouse2 === 'push') {
-    show(document.querySelector('.settings-row:has(#push-mode-input)'));
-    show(document.querySelector('.settings-row:has(#push-type-input)'));
-    show(document.querySelector('.settings-row:has(#push-strength-input)'));
-    show(document.querySelector('.settings-row:has(#push-radius-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#push-mode-input)'));
-    hide(document.querySelector('.settings-row:has(#push-type-input)'));
-    hide(document.querySelector('.settings-row:has(#push-strength-input)'));
-    hide(document.querySelector('.settings-row:has(#push-radius-input)'));
-  }
-  if (mouse1 === 'pull' || mouse2 === 'pull') {
-    show(document.querySelector('.settings-row:has(#pull-mode-input)'));
-    show(document.querySelector('.settings-row:has(#pull-type-input)'));
-    show(document.querySelector('.settings-row:has(#pull-strength-input)'));
-    show(document.querySelector('.settings-row:has(#pull-radius-input)'));
-  } else {
-    hide(document.querySelector('.settings-row:has(#pull-mode-input)'));
-    hide(document.querySelector('.settings-row:has(#pull-type-input)'));
-    hide(document.querySelector('.settings-row:has(#pull-strength-input)'));
-    hide(document.querySelector('.settings-row:has(#pull-radius-input)'));
+  for (const config of Object.values(configDOM)) {
+    config.checkRequirements();
   }
 }
 
 //sets variables to values of inputs
 function inputHandler(e) {
-  let input = e.target;
-  let id = input.id;
-  if (id === 'gravity-x-input' || id === 'gravity-x-input-slider') {
-    gravityX = Number(input.value);
-  } else if (id === 'gravity-y-input' || id === 'gravity-y-input-slider') {
-    gravityY = Number(input.value);
-  } else if (id === 'friction-input' || id === 'friction-input-slider') {
-    friction = Number(input.value);
-  } else if (id === 'absorption-input') {
-    enableAbsorb = Boolean(input.checked);
-  } else if (id === 'absorption-threshold-input') {
-    absorbThresh = Number(input.value);
-  } else if (id === 'ballcount-input') {
-    ballCount = Number(input.value);
-  } else if (id === 'min-size-input') {
-    minSize = Number(input.value);
-  } else if (id === 'max-size-input') {
-    maxSize = Number(input.value);
-  } else if (id === 'max-speed-input') {
-    maxSpeed = Number(input.value);
-  } else if (id === 'collision-input') {
-    collision = Boolean(input.checked);
-  } else if (id === 'mouse1-input') {
-    mouse1 = String(input.value);
-  } else if (id === 'mouse2-input') {
-    mouse2 = String(input.value);
-  } else if (id === 'generate-count-input') {
-    clickGenerateCount = Number(input.value);
-  } else if (id === 'generate-speed-input') {
-    clickGenerateSpeed = Number(input.value);
-  } else if (id === 'delete-radius-input') {
-    deleteRadius = Number(input.value);
-  } else if (id === 'split-count-input') {
-    splitCount = Number(input.value);
-  } else if (id === 'split-speed-input') {
-    splitSpeed = Number(input.value);
-  } else if (id === 'push-mode-input') {
-    pushMode = String(input.value);
-  } else if (id === 'push-type-input') {
-    pushType = String(input.value);
-  } else if (id === 'push-strength-input') {
-    pushStrength = Number(input.value);
-  } else if (id === 'push-radius-input') {
-    pushRadius = Number(input.value);
-  } else if (id === 'pull-mode-input') {
-    pullMode = String(input.value);
-  } else if (id === 'pull-strength-input') {
-    pullStrength = Number(input.value);
-  } else if (id === 'pull-radius-input') {
-    pullRadius = Number(input.value);
-  } else if (id === 'pull-type-input') {
-    pullType = String(input.value);
+  let id = e.target.id;
+  let value;
+  if (e.target.type === 'checkbox') {
+    value = e.target.checked;
+  } else {
+    value = e.target.value;
+  }
+  let input = configDOM[id.substring(0, id.indexOf('-'))]
+  input.setValue(value, false);
+  if (input.action) {
+    input.action(input);
   }
   updateMenu()
-}
-
-//sets up the event listeners
-function addEventListeners() {
-
-  //links sliders and number inputs
-  document.querySelectorAll('.slider-row').forEach(row => {
-    const numInput = row.querySelector('input[type=number]');
-    const slider = row.querySelector('input[type=range]');
-  
-    numInput.addEventListener('input', () => {
-      slider.value = numInput.value;
-    })
-    slider.addEventListener('input', () => {
-      numInput.value = slider.value;
-    })
-  })
-
-  //input events
-  document.querySelectorAll('input, select').forEach(input => {
-    input.addEventListener('input', inputHandler);
-  })
-
-  //adds button handler to each button
-  document.querySelectorAll('button').forEach(btn => {
-    btn.addEventListener('click', buttonHandler);
-  })
-  
-  //enables canvas to respond to screen size changes
-  window.addEventListener('resize', () => {
-    width = canvas.width = pageWrapper.clientWidth;
-    height = canvas.height = pageWrapper.clientHeight;
-  })
-  
-  //adds click events
-  canvas.addEventListener('mousedown', clickHandler);
-  window.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
-  });
-  window.addEventListener('mouseup', (e) => {
-    if (e.button === 0) {mouse1Down = false}
-    else if (e.button === 2) {mouse2Down = false}
-  });
-
-  //add touch events
-  canvas.addEventListener('touchstart', touchHandler);
-  canvas.addEventListener('touchend', touchEndHandler);
-  canvas.addEventListener('touchcancel', touchCancelHandler);
-  canvas.addEventListener('touchmove', touchMoveHandler);
-
-
-  //disables right-click menu on canvas
-  canvas.addEventListener("contextmenu", e => {
-    e.preventDefault();
-  }, false);
 }
 
 //does an action to every ball that meets a given condition
@@ -646,6 +1018,15 @@ function deleteBalls(x, y, radius) {
   })
 }
 
+//colors balls within a radius
+function colorBalls(x, y, radius, [r, g, b]) {
+  checkAllCollisions(x, y, radius, (ball) => {
+    ball.r = r;
+    ball.g = g;
+    ball.b = b;
+  })
+}
+
 //adds to velocity of an object
 function applyForce(object, forceX, forceY) {
   object.setVelocity(object.velX - forceX, object.velY - forceY)
@@ -657,7 +1038,7 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
     let xSign = (x - ball.x > 0) ? 1: -1;
     let YSign = (y - ball.y > 0) ? 1: -1;
 
-    if (type === 'test') {
+    if (type === 'star') {
       forceX = (strength * 100) / (x - ball.x) / (dist * dist);
       forceY = (strength * 100) / (y - ball.y) / (dist * dist);
     } else if (type === 'linear') {
@@ -690,19 +1071,19 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
 
 //applies force to all balls in a radius
 function forceBalls(x, y, radius, strength, mode, type='linear') {
-  if (mode === 'push' && pushMode === 'default') {
+  if (mode === 'push' && config.pushMode === 'default') {
     checkAllCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (mode === 'push' && pushMode === 'inverted') {
+  } else if (mode === 'push' && config.pushMode === 'inverted') {
     checkAllNonCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (mode === 'pull' && pullMode === 'default') {
+  } else if (mode === 'pull' && config.pullMode === 'default') {
     checkAllCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
-  } else if (mode === 'pull' && pullMode === 'inverted') {
+  } else if (mode === 'pull' && config.pullMode === 'inverted') {
     checkAllNonCollisions(x, y, radius, (ball, dist) => {
       generateForce(ball, type, mode, dist, x, y, strength)
     })
@@ -722,17 +1103,19 @@ function pushBalls(x, y, radius, strength, type) {
 //uses an ability at a coordinate
 function useAbility(ability, [x, y]) {
   if (ability === 'generate') {
-    addBalls(clickGenerateCount, null, x, y, clickGenerateSpeed)
+    addBalls(config.clickGenerateCount, null, x, y, config.clickGenerateSpeed)
   } else if (ability === 'delete') {
-    deleteBalls(x, y, deleteRadius);
+    deleteBalls(x, y, config.deleteRadius);
   } else if (ability === 'split') {
     checkOneCollision(x, y, 1, (ball) => {
-      ball.split(splitCount);
+      ball.split(config.splitCount);
     }) 
   } else if (ability === 'push') {
-    pushBalls(x, y, pushRadius, pushStrength, pushType);
+    pushBalls(x, y, config.pushRadius, config.pushStrength, config.pushType);
   } else if (ability === 'pull') {
-    pullBalls(x, y, pullRadius, pullStrength, pullType);
+    pullBalls(x, y, config.pullRadius, config.pullStrength, config.pullType);
+  } else if (ability === 'color') {
+    colorBalls(x, y, config.clickColorRadius, generateColor('ability'));
   } 
 }
 
@@ -762,11 +1145,11 @@ function clickHandler(e) {
   let isMouseDown;
 
   if (e.button === 0) { //left mouse
-    ability = abilities[mouse1];
+    ability = abilities[config.mouse1];
     mouse1Down = true;
     isMouseDown = () => mouse1Down;
   } else if (e.button === 2) { //right mouse
-    ability = abilities[mouse2];
+    ability = abilities[config.mouse2];
     mouse2Down = true;
     isMouseDown = () => mouse2Down;
   }
@@ -782,11 +1165,11 @@ function clickHandler(e) {
 function touchHandler(e) {
   e.preventDefault();
   e.stopPropagation();
-  let ability = abilities[mouse1];
+  let ability = abilities[config.mouse1];
   let touches = e.targetTouches;
   for (const touch of touches) {
     let id = touch.identifier
-    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY}
+    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {/*delete touchesList[id]*/}, 15000)}
   
     if (ability.repeats) {
       repeatAbility(ability.name, ability.interval, ()=>getTouchCoords(id), ()=>touchesList[id]);
@@ -802,8 +1185,12 @@ function touchMoveHandler(e) {
   e.stopPropagation();
   let touches = e.changedTouches;
   for (const touch of touches) {
-    touchesList[touch.identifier].x = touch.clientX;
-    touchesList[touch.identifier].y = touch.clientY;
+    let id = touch.identifier;
+    // if (!TouchList[id]) { continue }
+    clearTimeout(touchesList[id].timeoutId);
+    touchesList[id].x = touch.clientX;
+    touchesList[id].y = touch.clientY;
+    touchesList[id].timeoutId = setTimeout(() => {delete touchesList[identifier]}, 10000);
   }
 }
 
@@ -815,7 +1202,6 @@ function touchEndHandler(e) {
   for (const touch of touches) {
     let id = touch.identifier;
     delete touchesList[id];
-
   }
 }
 
@@ -826,33 +1212,206 @@ function touchCancelHandler(e) {
   delete touchesList[id];
 }
 
+//handles keypresses
+function keyHandler(e) {
+  let key = e.key;
+  if (key === 'F9') {
+    debug.toggle();
+  }
+}
+
+//makes mouse abilities mutually exclusive
+function checkMouseValues(mouse) {
+  // let primary = mouse?.id ?? 'mouse1';
+  // if (primary === 'mouse1' && config.mouse2 === config.mouse1 && config.mouse2 != 'none') {
+  //   configDOM.mouse2.setValue('none');
+  // } else if (config.mouse1 === config.mouse2 && config.mouse1 != 'none') {
+  //   configDOM.mouse1.setValue('none');
+  // }
+}
+
+//sets up the event listeners
+function addEventListeners() {
+
+  //adds button handler to each button
+  document.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', buttonHandler);
+  })
+  
+  //enables canvas to respond to screen size changes
+  window.addEventListener('resize', () => {
+    width = canvas.width = hiddenCanvas.width = pageWrapper.clientWidth;
+    height = canvas.height = hiddenCanvas.height = pageWrapper.clientHeight;
+  })
+  
+  //adds click events
+  canvas.addEventListener('mousedown', clickHandler);
+  window.addEventListener('mousemove', (e) => {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) {mouse1Down = false}
+    else if (e.button === 2) {mouse2Down = false}
+  });
+
+  //add touch events
+  canvas.addEventListener('touchstart', touchHandler);
+  canvas.addEventListener('touchend', touchEndHandler);
+  canvas.addEventListener('touchcancel', touchCancelHandler);
+  canvas.addEventListener('touchmove', touchMoveHandler);
+
+
+  //disables right-click menu on canvas
+  canvas.addEventListener("contextmenu", e => {
+    e.preventDefault();
+  }, false);
+
+  //keypress events
+  window.addEventListener('keyup', keyHandler)
+}
+
 //generates ability settings
 function initAbilities() {
-  abilities.generate = new Ability('generate', false);
-  abilities.delete = new Ability('delete', true, 5);
-  abilities.split = new Ability('split', false);
+  abilities.none = new Ability('none', false);
   abilities.push = new Ability('push', true);
   abilities.pull = new Ability('pull', true);
+  abilities.split = new Ability('split', false);
+  abilities.generate = new Ability('generate', false);
+  abilities.delete = new Ability('delete', true, 5);
+  abilities.color = new Ability('color', true);
+}
+
+//sets whether an ability repeats
+function setAbilityRepeat(ability) {
+  ability
+}
+
+//creates input objects and populates settings menu 
+function initInputs() {
+  //GENERAL
+  const general = new MainContainer('general', 'General', null, [{n: 'currentMenu', v: 'general'}]);
+  general.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
+  general.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
+  general.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
+  general.addChild(new ConfigCheckbox('collision', 'Collision', null, true));
+  general.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [{n: 'collision', v: true}]));
+  general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [{n: 'enableAbsorb', v: true}]));
+    //-walls
+  const wallContainer = new Container('wallContainer', 'Walls');
+  wallContainer.addChild(new ConfigCheckbox('wallCollision', 'Wall Collision', null, true));
+  wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [{n: 'wallCollision', v: true}]));
+  wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [{n: 'wallCollision', v: true}]));
+  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [{n: 'wallCollision', v: true}]));
+  general.addChild(wallContainer);
+  //GENERATION
+  const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [{n: 'currentMenu', v: 'generation'}]);
+  generation.addChild(new ConfigNumber('ballGenCount', 'Count', null, 100, 0, Infinity, 1));
+  generation.addChild(new ConfigNumber('ballGenMinSize', 'Min Size', null, 10, 0, Infinity, 1));
+  generation.addChild(new ConfigNumber('ballGenMaxSize', 'Max Size', null, 20, 0, Infinity, 1));
+  generation.addChild(new ConfigNumber('ballGenSpeed', 'Speed', null, 0.5, 0, Infinity, .01));
+    //-color
+  const ballColorContainer = new Container('ballColorContainer', 'Color');
+  ballColorContainer.addChild(new ConfigCheckbox('ballColorRandom', 'Random Color', null, true));
+  ballColorContainer.addChild(new ConfigSlider('ballColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  generation.addChild(ballColorContainer);
+  //ABILITIES
+  const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [{n: 'currentMenu', v: 'abilities'}]);
+  const availableAbilities = Object.values(abilities).map(a => a.name);
+  abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null));
+  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{n: 'enableMouse2', v: true}]));
+  const abilityLayout = new LayoutContainer('abilityLayout');
+    //-push
+  const pushContainer = new Container('pushContainer', 'Push', null, [{n: 'mouse1', n2: 'mouse2', v: 'push'}]);
+  pushContainer.addChild(new ConfigDropdown('pushMode', 'Push Mode', null, 'default', ['default', 'inverted']));
+  pushContainer.addChild(new ConfigDropdown('pushType', 'Push Type', null, 'linear', pushTypes)); 
+  pushContainer.addChild(new ConfigNumber('pushStrength', 'Push Strength', null, 1.5, 0, Infinity, .01));
+  pushContainer.addChild(new ConfigNumber('pushRadius', 'Push Radius', null, 1.5, 0, Infinity, .01));
+  pushContainer.addChild(new ConfigNumber('pushInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['push', 'interval']}, 50, 0, Infinity, 1));
+  abilityLayout.addChild(pushContainer);
+    //-pull
+  const pullContainer = new Container('pullContainer', 'Pull', null, [{n: 'mouse1', n2: 'mouse2', v: 'pull'}]);
+  pullContainer.addChild(new ConfigDropdown('pullMode', 'Pull Mode', null, 'default', ['default', 'inverted']));
+  pullContainer.addChild(new ConfigDropdown('pullType', 'Pull Type', null, 'linear', pullTypes)); 
+  pullContainer.addChild(new ConfigNumber('pullStrength', 'Pull Strength', null, 1.5, 0, Infinity, .01));
+  pullContainer.addChild(new ConfigNumber('pullRadius', 'Pull Radius', null, 1.5, 0, Infinity, .01));
+  pullContainer.addChild(new ConfigNumber('pullInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['pull', 'interval']}, 50, 0, Infinity, 1));
+  abilityLayout.addChild(pullContainer);
+    //-split
+  const splitContainer = new Container('splitContainer', 'Split', null, [{n: 'mouse1', n2: 'mouse2', v: 'split'}]);
+  splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', null, 2, 2, Infinity, 1));
+  splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', null, 1, 0, Infinity, .01));
+  splitContainer.addChild(new ConfigCheckbox('splitRepeats', 'Repeats', {parent: abilities, path: ['split', 'repeats']}, false));
+  splitContainer.addChild(new ConfigNumber('splitInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['split', 'interval']}, 50, 0, Infinity, 1));
+  abilityLayout.addChild(splitContainer);
+    //-generate
+  const generateContainer = new Container('generateContainer', 'Generate', null, [{n: 'mouse1', n2: 'mouse2', v: 'generate'}]);
+  generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', null, 2, 1, Infinity, 1));
+  generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', null, 1, 0, Infinity, .01));
+  generateContainer.addChild(new ConfigCheckbox('generateRepeats', 'Repeats', {parent: abilities, path: ['generate', 'repeats']}, false));
+  generateContainer.addChild(new ConfigNumber('generateInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['generate', 'interval']}, 50, 0, Infinity, 1));
+  abilityLayout.addChild(generateContainer);
+    //-delete
+  const deleteContainer = new Container('deleteContainer', 'Delete', null, [{n: 'mouse1', n2: 'mouse2', v: 'delete'}]);
+  deleteContainer.addChild(new ConfigNumber('deleteRadius', 'Delete Radius', null, 10, 0, Infinity, 1));
+  abilityLayout.addChild(deleteContainer);
+    //-color
+  const colorContainer = new Container('colorContainer', 'Color', null, [{n: 'mouse1', n2: 'mouse2', v: 'color'}]);
+  colorContainer.addChild(new ConfigNumber('clickColorRadius', 'Color Radius', null, 10, 0, Infinity, 1));
+  colorContainer.addChild(new ConfigCheckbox('clickColorRandom', 'Random Color', null, true));
+  colorContainer.addChild(new ConfigSlider('clickColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
+  colorContainer.addChild(new ConfigSlider('clickColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
+  colorContainer.addChild(new ConfigSlider('clickColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
+  colorContainer.addChild(new ConfigNumber('colorInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['color', 'interval']}, 50, 0, Infinity, 1));
+  abilityLayout.addChild(colorContainer);
+  abilitiesContainer.addChild(abilityLayout);
+
+  const settingsContainer = document.querySelector('.settings-col');
+  settingsContainer.appendChild(general.element);
+  settingsContainer.appendChild(generation.element);
+  settingsContainer.appendChild(abilitiesContainer.element);
+  general.addEventListeners();
+  generation.addEventListeners();
+  abilitiesContainer.addEventListeners();
+
+  for (const object of Object.values(configDOM)) {
+    if (object.type === 'input') {
+      object.setValue(object.getConfigValue());
+    }
+  }
 }
 
 //changes settings based on if device is mobile
 function setupMobile() {
-  if (window.innerWidth <= 800 && window.innerHeight <= 600) {
-    //do stuff
+  if (window.innerWidth <= 800 && window.innerHeight <= 800 ||
+      window.innerWidth <= 1000 && window.innerHeight <= 600) {
+    configDOM.mouse2.setValue('none');
+    config.enableMouse2 = false;
   }
 }
 
 //initialises the page. DO NOT RUN MORE THAN ONCE!
 async function init() {
+  
   initAbilities();
+
+  initInputs();
+
+  checkMouseValues();
 
   addEventListeners();
 
-  updateMenu()
+  setupMobile();
+
+  updateMenu();
+
+  selectSection('general');
   
   //generates the balls
-  addBalls(ballCount);
-  
+  addBalls(config.ballGenCount);
+
   //initiates the loop
   loop()
 }
