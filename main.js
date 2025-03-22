@@ -1,11 +1,13 @@
 // setup canvas
 
 const canvas = document.querySelector('canvas');
-const ctx = canvas.getContext('2d');
+const hiddenCanvas = document.createElement("canvas");
+const ctx = hiddenCanvas.getContext("2d");
+const visibleCtx = canvas.getContext("2d");
 const pageWrapper = document.getElementById('page-wrapper');
 
-let width = canvas.width = pageWrapper.clientWidth;
-let height = canvas.height = pageWrapper.clientHeight;
+let width = canvas.width = hiddenCanvas.width  = pageWrapper.clientWidth;
+let height = canvas.height = hiddenCanvas.height = pageWrapper.clientHeight;
 
 let balls = [];
 let requestId; //animationRequest
@@ -15,6 +17,9 @@ let mouseY = 0;
 let mouse1Down = false;
 let mouse2Down = false;
 let touchesList = [];
+let lastTime = 0;
+let deltaTime = 0;
+let fps = 0;
 
 //holds all game data (configs, ect)
 class Game {
@@ -31,6 +36,8 @@ class Game {
       ballGenMaxSize: 20,
       ballGenSpeed: 0.5,
       ballGenCount: 100,
+      ballRandomColor: true,
+      ballColor: 'rgb(255,255,255)',
       collision: true,
       clickGenerateCount: 1,
       clickGenerateSpeed: 1,
@@ -46,7 +53,8 @@ class Game {
       pullRadius: 200,
       pullType: 'linear',
       mouse1: 'push', //command for left click
-      mouse2: 'pull' //command for right click
+      mouse2: 'pull', //command for right click
+      currentMenu: 'general'
     }
 
     //holds all the config elements and containers
@@ -82,7 +90,11 @@ class Debug {
       this.queue.push(`Touch-${touch.id}-X: ${touch.x}`);
       this.queue.push(`Touch-${touch.id}-Y: ${touch.y}`);
     }
-    this.printQueue();
+  }
+
+  getFPS() {
+    fps = Math.round(1000 / deltaTime);
+    this.queue.push(fps)
   }
 
   printQueue() {
@@ -211,7 +223,7 @@ class DOMElement {
   generateInner() {}
   //generates the base element (no innerHTML)
   generateBase() {
-    let element = document.createElement('div');
+    let element = document.createElement(this.tag);
     return element;
   }
   //adds event listeners to the element
@@ -552,7 +564,7 @@ class Ball {
   //draws
   draw() {
     ctx.beginPath();
-    ctx.fillStyle = `rgb(${this.r}, ${this.g}, ${this.b}`;
+    ctx.fillStyle = `rgb(${~~this.r}, ${~~this.g}, ${~~this.b}`;
     ctx.arc(this.x, this.y, this.radius, 0, 2 * Math.PI);
     ctx.fill();
   }
@@ -662,17 +674,15 @@ class Ball {
   collisionDetect() {
     if (!config.collision) { return }
     for (let j = 0; j < balls.length; j++) {
-      if (!(this === balls[j])) {
-        const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
-
-        //collision condition
-        if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
-          //If the velocity between the two are great enough
-          if (config.enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > config.absorbThresh) {
-            this.fuse(balls[j])
-          } else {
-            this.bounce(balls[j])
-          }
+      if (this === balls[j]) { continue };
+      const distance = getDistance([this.x, this.y], [balls[j].x, balls[j].y]);
+      //collision condition
+      if (distance < this.radius + balls[j].radius && !this.isRebounding(balls[j])) {
+        //If the velocity between the two are great enough
+        if (config.enableAbsorb && Math.abs((this.velX - balls[j].velX) + (this.velY - balls[j].velY)) > config.absorbThresh) {
+          this.fuse(balls[j])
+        } else {
+          this.bounce(balls[j])
         }
       }
     }
@@ -745,26 +755,51 @@ class Ball {
 }
 
 //main animation loop
-function loop() {
+function loop(currentTime) {
+  deltaTime = currentTime - lastTime;
+  lastTime = currentTime;
+
   ctx.fillStyle = 'rgba(0, 0, 0, 1)';
   ctx.fillRect(0, 0, width, height);
-
   for (let i = 0; i < balls.length; i++) {
-    balls[i].draw();
-    balls[i].update();
-    balls[i].collisionDetect();
+    balls[i]?.update();
+    balls[i]?.collisionDetect();
+    balls[i]?.draw();
+    
   }
+
+  visibleCtx.drawImage(hiddenCanvas, 0, 0);
 
   requestId = requestAnimationFrame(loop);
 
   // debug.getTouchPositions();
+  debug.getFPS();
+  debug.printQueue();
+}
+
+//converts a string of the form 'rgb(0,0,0) 
+//into an array [r, g, b]'
+function rgbStringToObject(str) {
+  const startIndex = str.indexOf('(') + 1;
+  const endIndex = str.indexOf(')');
+  const rgbValues = str.substring(startIndex, endIndex).split(',').map(Number);
+  return rgbValues;
+}
+
+//generates color based on config settings
+function generateColor() {
+  if (config.ballRandomColor) {
+    return [random(0,255), random(0,255), random(0,255)]
+  } else {
+    return rgbStringToObject(config.ballColor);
+  }
 }
 
 //populates screen with balls
-function addBalls(num, size, x, y, speed, vx, vy) {
+function addBalls(num, size, x, y, speed, vx, vy, color) {
   for (let i = 0; i < num; i++) {
     let radius = size || random(config.ballGenMinSize, config.ballGenMaxSize);
-    let newSpeed = speed ?? config.ballGenSpeed
+    let newSpeed = speed ?? config.ballGenSpeed;
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
@@ -772,7 +807,7 @@ function addBalls(num, size, x, y, speed, vx, vy) {
       y ?? random(0 + radius,height - radius),
       vx ?? random(-newSpeed * 100,newSpeed * 100) / 100,
       vy ?? random(-newSpeed * 100,newSpeed * 100) / 100,
-      [random(0,255), random(0,255), random(0,255)],
+      color ?? generateColor(),
       radius
     );
   
@@ -794,26 +829,18 @@ function startCanvas() {
 }
 
 //toggles a settings menu main section
-function toggleSection(selectedBtn) {
-  let container = selectedBtn.parentElement.parentElement;
+function selectSection(category, containerID='settings-nav') {
+  let container = document.getElementById(containerID);
+  let buttonID = category + '-toggle';
   for (let button of container.querySelectorAll('button')) {
-    if (button.id != selectedBtn.id) {
+    if (button.id != buttonID) {
       button.classList.remove('active');
-    }
-  }
-  selectedBtn.classList.add('active');
-  let links = {
-    'general-toggle': 'general-section',
-    'generation-toggle': 'ballGeneration-section', 
-    'abilities-toggle': 'abilities-section'
-  }
-  for (section of document.querySelectorAll('.settings-section-main')) {
-    if (links[selectedBtn.id] != section.id) {
-      section.classList.add('hidden');
     } else {
-      section.classList.remove('hidden');
+      button.classList.add('active');
     }
   }
+  config.currentMenu = category;
+  updateMenu();
 }
 
 //handles every button press
@@ -834,7 +861,10 @@ function buttonHandler(e) {
   } else if (id === 'settings-close') {
     document.getElementById('settings').classList.add('hidden');
   } else if (btn.parentElement.parentElement.classList.contains('nav')) {
-    toggleSection(btn);
+    selectSection(btn.id.substring(0, btn.id.indexOf('-')));
+  }
+  if (btn.classList.contains('test-icon')) {
+    btn.classList.add('active')
   }
 }
 
@@ -1053,7 +1083,7 @@ function touchHandler(e) {
   let touches = e.targetTouches;
   for (const touch of touches) {
     let id = touch.identifier
-    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {delete touchesList[id]}, 15000)}
+    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {/*delete touchesList[id]*/}, 15000)}
   
     if (ability.repeats) {
       repeatAbility(ability.name, ability.interval, ()=>getTouchCoords(id), ()=>touchesList[id]);
@@ -1124,8 +1154,8 @@ function addEventListeners() {
   
   //enables canvas to respond to screen size changes
   window.addEventListener('resize', () => {
-    width = canvas.width = pageWrapper.clientWidth;
-    height = canvas.height = pageWrapper.clientHeight;
+    width = canvas.width = hiddenCanvas.width = pageWrapper.clientWidth;
+    height = canvas.height = hiddenCanvas.height = pageWrapper.clientHeight;
   })
   
   //adds click events
@@ -1168,7 +1198,7 @@ function initAbilities() {
 //creates input objects and populates settings menu 
 function initInputs() {
   //GENERAL
-  const general = new MainContainer('general', 'General');
+  const general = new MainContainer('general', 'General', null, [{n: 'currentMenu', v: 'general'}]);
   general.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
   general.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
   general.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
@@ -1177,14 +1207,14 @@ function initInputs() {
   general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [{n: 'enableAbsorb', v: true}]));
 
   //GENERATION
-  const generation = new MainContainer('ballGeneration', 'Ball Generation');
+  const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [{n: 'currentMenu', v: 'generation'}]);
   generation.addChild(new ConfigNumber('ballGenCount', 'Count', null, 100, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMinSize', 'Min Size', null, 10, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMaxSize', 'Max Size', null, 20, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenSpeed', 'Speed', null, 0.5, 0, Infinity, .01));
 
   //ABILITIES
-  const abilitiesContainer = new MainContainer('abilities', 'Abilities');
+  const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [{n: 'currentMenu', v: 'abilities'}]);
   const availableAbilities = Object.values(abilities).map(a => a.name);
   abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null, checkMouseValues));
   abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{n: 'enableMouse2', v: true}], checkMouseValues));
@@ -1257,7 +1287,7 @@ async function init() {
 
   updateMenu();
 
-  toggleSection(document.getElementById('general-toggle'));
+  selectSection('general');
   
   //generates the balls
   addBalls(config.ballGenCount);

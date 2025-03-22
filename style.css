@@ -2,6 +2,7 @@
 :root {
   --blur-bg-color: rgba(0, 0, 0, 0.85);
   --primary-border-color: rgba(255, 255, 255, 0.25);
+  --button-active: rgb(253, 255, 219);
 }
 
 * {
@@ -205,6 +206,11 @@ nav .wrap {
   mask-repeat: no-repeat;
   mask-size: contain;
   mask-position: center;
+  mask-size: 100%;
+}
+
+.test-icon {
+  mask-image: url(imgs/settings.svg);
 }
 
 nav:not(:has(#menu-toggle.active)) {
@@ -323,23 +329,28 @@ nav:not(:has(#menu-toggle.active)) {
 .settings-heading .nav {
   width: 100%;
   display: flex;
-  flex-direction: row;
-  justify-content: left;
+  flex-flow: row wrap;
+  justify-content: center;
   gap: clamp(1rem, 15%, 2rem);
-  padding: 1rem;
+  padding: 0 1rem 1rem 1rem;
 }
 
 .settings-heading .nav .icon-wrap {
   width: clamp(36px, 10%, 48px);
-  transition: 200ms ease background-color;
+  transition: 200ms ease;
 }
 
 .settings-heading .nav .icon-wrap button {
-  background-color: rgb(255, 255, 255);
+  background-color: rgba(255, 255, 255, 0.801);
+  transition: 200ms ease;
 }
 
 .settings-heading .nav .icon-wrap button.active {
-  background-color: rgb(246, 255, 123);
+  background-color: var(--button-active);
+}
+
+.settings-heading .nav .icon-wrap:has(button.active) {
+  filter: drop-shadow(0 0 8px var(--button-active));
 }
 
 .icon-wrap:has(#settings-close) {
@@ -387,6 +398,7 @@ nav:not(:has(#menu-toggle.active)) {
   flex-basis: 20rem;
   flex-grow: 1;
   margin-bottom: 0;
+  max-width: 50rem;
 }
 
 .settings-row:not(.hidden) {
@@ -625,6 +637,6 @@ input[type=checkbox]:hover {
 
 @container (max-width: 30rem) {
   #settings label, #settings select, #settings input {
-    font-size: clamp(14px, 4cqw, 20px);
+    font-size: clamp(16px, 4cqw, 20px);
   }
 }
