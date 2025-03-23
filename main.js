@@ -58,11 +58,11 @@ class Game {
       splitCount: 2,
       splitSpeed: 1,
       pushMode: 'default',
-      pushStrength: 1.5,
+      pushStrength: 1,
       pushRadius: 150,
       pushType: 'linear',
       pullMode: 'default',
-      pullStrength: 1.5,
+      pullStrength: 1,
       pullRadius: 200,
       pullType: 'linear',
       clickColorRadius: 10,
@@ -84,7 +84,7 @@ let config = game.config;
 let configDOM = game.configDOM;
 let abilities = game.abilities;
 let currentSettings = {};
-let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star'];
+let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star', 'dialate', 'misc1', 'misc2'];
 let pullTypes = pushTypes;
 
 //debug menu
@@ -1036,11 +1036,11 @@ function applyForce(object, forceX, forceY) {
 function generateForce(ball, type, mode, dist, x, y, strength) {
   let forceX, forceY;
     let xSign = (x - ball.x > 0) ? 1: -1;
-    let YSign = (y - ball.y > 0) ? 1: -1;
+    let ySign = (y - ball.y > 0) ? 1: -1;
 
     if (type === 'star') {
-      forceX = (strength * 100) / (x - ball.x) / (dist * dist);
-      forceY = (strength * 100) / (y - ball.y) / (dist * dist);
+      forceX = (strength * 200) / (x - ball.x) / (dist * dist);
+      forceY = (strength * 200) / (y - ball.y) / (dist * dist);
     } else if (type === 'linear') {
       forceX = (strength / 1000) * (x - ball.x);
       forceY = (strength / 1000) * (y - ball.y);
@@ -1052,13 +1052,25 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
       forceY = (strength / 10) / (y - ball.y);
     } else if (type === 'cross2') {
       forceX = (strength / 100) * Math.log10(dist) * xSign;
-      forceY = (strength / 100) * Math.log10(dist) * YSign;
+      forceY = (strength / 100) * Math.log10(dist) * ySign;
     } else if(type === 'cross3') {
       forceX = (strength / 500) / (x - ball.x) * dist;
       forceY = (strength / 500) / (y - ball.y) * dist;
     } else if (type === 'cross4') {
       forceX = (strength * 10) / (x - ball.x) / dist;
       forceY = (strength * 10) / (y - ball.y) / dist;
+    } else if (type === 'dialate') {
+      forceX = (strength / 50000) * (x - ball.x) * dist;
+      forceY = (strength / 50000) * (y - ball.y) * dist;
+    } else if (type === 'misk1') {
+      forceX = (strength / 500) * (x - ball.x) * (x - ball.x) / dist * xSign;
+      forceY = (strength / 500) * (y - ball.y) * (y - ball.y) / dist * ySign;
+    } else if (type === 'misc2') {
+      forceX = (x - ball.x);
+      forceY = (y - ball.y);
+      let norm = unit([forceX, forceY]);
+      forceX = norm.x * xSign * (strength / 500)
+      forceY = norm.y * ySign * (strength / 500)
     }
 
     if (mode === 'pull') {
