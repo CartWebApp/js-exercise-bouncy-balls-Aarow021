@@ -63,7 +63,7 @@ class Game {
       pushType: 'linear',
       pullMode: 'default',
       pullStrength: 1,
-      pullRadius: 200,
+      pullRadius: 150,
       pullType: 'linear',
       clickColorRadius: 10,
       clickColorRandom: false,
@@ -1037,6 +1037,7 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
   let forceX, forceY;
     let xSign = (x - ball.x > 0) ? 1: -1;
     let ySign = (y - ball.y > 0) ? 1: -1;
+    dist = dist || 10e-20
 
     if (type === 'star') {
       forceX = (strength * 200) / (x - ball.x) / (dist * dist);
@@ -1048,29 +1049,29 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
       forceX = (strength / 10) * (x - ball.x) / dist;
       forceY = (strength / 10) * (y - ball.y) / dist;
     } else if (type === 'cross1') {
-      forceX = (strength / 10) / (x - ball.x);
-      forceY = (strength / 10) / (y - ball.y);
+      forceX = (strength / 2) / (x - ball.x);
+      forceY = (strength / 2) / (y - ball.y);
     } else if (type === 'cross2') {
-      forceX = (strength / 100) * Math.log10(dist) * xSign;
-      forceY = (strength / 100) * Math.log10(dist) * ySign;
+      forceX = (strength / 50) * Math.log10(dist) * xSign;
+      forceY = (strength / 50) * Math.log10(dist) * ySign;
     } else if(type === 'cross3') {
-      forceX = (strength / 500) / (x - ball.x) * dist;
-      forceY = (strength / 500) / (y - ball.y) * dist;
+      forceX = (strength / 150) / (x - ball.x) * dist;
+      forceY = (strength / 150) / (y - ball.y) * dist;
     } else if (type === 'cross4') {
-      forceX = (strength * 10) / (x - ball.x) / dist;
-      forceY = (strength * 10) / (y - ball.y) / dist;
+      forceX = (strength * 30) / (x - ball.x) / dist;
+      forceY = (strength * 30) / (y - ball.y) / dist;
     } else if (type === 'dialate') {
-      forceX = (strength / 50000) * (x - ball.x) * dist;
-      forceY = (strength / 50000) * (y - ball.y) * dist;
-    } else if (type === 'misk1') {
+      forceX = (strength / 100000) * (x - ball.x) * dist;
+      forceY = (strength / 100000) * (y - ball.y) * dist;
+    } else if (type === 'misc1') {
       forceX = (strength / 500) * (x - ball.x) * (x - ball.x) / dist * xSign;
       forceY = (strength / 500) * (y - ball.y) * (y - ball.y) / dist * ySign;
     } else if (type === 'misc2') {
       forceX = (x - ball.x);
       forceY = (y - ball.y);
       let norm = unit([forceX, forceY]);
-      forceX = norm.x * xSign * (strength / 500)
-      forceY = norm.y * ySign * (strength / 500)
+      forceX = norm.x * xSign * (strength / 8)
+      forceY = norm.y * ySign * (strength / 8)
     }
 
     if (mode === 'pull') {
@@ -1314,7 +1315,7 @@ function initInputs() {
   wallContainer.addChild(new ConfigCheckbox('wallCollision', 'Wall Collision', null, true));
   wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [{n: 'wallCollision', v: true}]));
   wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [{n: 'wallCollision', v: true}]));
-  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [{n: 'wallCollision', v: true}]));
+  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [{n: 'wallCollision', v: true}, {n: 'wallDeletesBalls', v: false}]));
   general.addChild(wallContainer);
   //GENERATION
   const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [{n: 'currentMenu', v: 'generation'}]);
