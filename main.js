@@ -547,7 +547,7 @@ class LayoutContainer extends Container {
 
 //base class for abilities
 class Ability {
-  constructor(name, repeats, interval, radius, strength, count, color, colorRandom, ...params) {
+  constructor(name, repeats, interval, radius, strength, speed, count, color, colorRandom, ...params) {
     this.name = name;
     this.repeats = repeats;
     this.interval = interval ?? 20;
@@ -556,6 +556,7 @@ class Ability {
     this.count = count ?? Infinity;
     this.color = color ?? {r: 255, g: 255, b: 255};
     this.colorRandom = colorRandom ?? false; //default or random
+    this.speed = speed ?? 1;
     this.params = params ?? []
     for (const param of this.params) {
       this[param.name] = param.value;
@@ -564,8 +565,8 @@ class Ability {
 }
 
 class MouseAbility extends Ability {
-  constructor(name, repeats, interval, radius, strength, count, color, colorRandom, ...params) {
-    super(name, repeats, interval, radius, strength, count, color, colorRandom, ...params)
+  constructor(name, repeats, interval, radius, strength, speed, count, color, colorRandom, ...params) {
+    super(name, repeats, interval, radius, strength, speed, count, color, colorRandom, ...params)
   }
 }
 
@@ -664,15 +665,9 @@ class Ball {
     let smallerBall = ball2.mass <= this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
-    if (config.ballColorRandom) {
-      biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
-      biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
-      biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
-    } else {
       biggerBall.r = (biggerBall.r + smallerBall.r * massRatio) / (1 + massRatio);
       biggerBall.g = (biggerBall.g + smallerBall.g * massRatio) / (1 + massRatio);
       biggerBall.b = (biggerBall.b + smallerBall.b * massRatio) / (1 + massRatio);
-    }
     //momentum
     biggerBall.momentumX += smallerBall.momentumX;
     biggerBall.momentumY += smallerBall.momentumY;
@@ -800,6 +795,7 @@ class Ball {
         360 / splits * i + randomDeg
       )
       let newSize = massToRadius(this.mass / splits, this.density);
+      if (newSize <= .033) {continue} //min size
       addBalls(
         1,
         newSize,
@@ -807,7 +803,8 @@ class Ball {
         this.y,
         null,
         newVelocity.x,
-        newVelocity.y
+        newVelocity.y,
+        [this.r, this.g, this.b]
       );
     }
     balls.splice(balls.indexOf(this), 1);
@@ -1083,12 +1080,12 @@ function pushBalls(x, y, radius, strength, type, mode) {
 //uses an ability at a coordinate
 function useAbility(ability, [x, y]) {
   if (ability.name === 'generate') {
-    addBalls(ability.count, null, x, y, ability.strength)
+    addBalls(ability.count, null, x, y, ability.speed)
   } else if (ability.name === 'delete') {
     deleteBalls(x, y, ability.radius);
   } else if (ability.name === 'split') {
-    checkAllCollisions(x, y, 1, 1, (ball) => {
-      ball.split(ability.count, ability.strength);
+    checkAllCollisions(x, y, ability.radius, ability.strength, (ball) => {
+      ball.split(ability.count, ability.speed);
     }, (ball, dist) => dist < ball.radius + ability.radius) 
   } else if (ability.name === 'push') {
     pushBalls(x, y, ability.radius, ability.strength, ability.type, ability.mode);
@@ -1152,9 +1149,9 @@ function touchHandler(e) {
     touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {/*delete touchesList[id]*/}, 15000)}
   
     if (ability.repeats) {
-      repeatAbility(ability.name, ability.interval, ()=>getTouchCoords(id), ()=>touchesList[id]);
+      repeatAbility(ability, ()=>getTouchCoords(id), ()=>touchesList[id]);
     } else {
-      useAbility(ability.name, [touch.clientX, touch.clientY])
+      useAbility(ability, [touch.clientX, touch.clientY])
     }
   }
 }
@@ -1254,12 +1251,12 @@ function addEventListeners() {
 //generates ability settings
 function initAbilities() {
   mouseAbilities.none = new MouseAbility('none', false);
-  mouseAbilities.push = new MouseAbility('push', true, null, 150, 1, null, null, null, {name: 'mode', value: 'default'}, {name: 'type', value: 'linear'});
-  mouseAbilities.pull = new MouseAbility('pull', true, null, 150, 1, null, null, null, {name: 'mode', value: 'default'}, {name: 'type', value: 'linear'});
-  mouseAbilities.split = new MouseAbility('split', false, null, null, null, 2);
-  mouseAbilities.generate = new MouseAbility('generate', false, null, null, 1, 1);
+  mouseAbilities.push = new MouseAbility('push', true, null, 150, 1, null, null, null, null, {name: 'mode', value: 'default'}, {name: 'type', value: 'linear'});
+  mouseAbilities.pull = new MouseAbility('pull', true, null, 150, 1, null, null, null, null, {name: 'mode', value: 'default'}, {name: 'type', value: 'linear'});
+  mouseAbilities.split = new MouseAbility('split', false, null, 0, 1, 1, 2);
+  mouseAbilities.generate = new MouseAbility('generate', false, null, null, null, 1, 1);
   mouseAbilities.delete = new MouseAbility('delete', true, 5, 10);
-  mouseAbilities.color = new MouseAbility('color', true, null, 10, null, null, {r: 255, g: 255, b: 255}, false);
+  mouseAbilities.color = new MouseAbility('color', true, null, 10, null, null, null, {r: 255, g: 255, b: 255}, false);
 }
 
 //sets whether an ability repeats
@@ -1322,14 +1319,14 @@ function initInputs() {
     //-split
   const splitContainer = new Container('splitContainer', 'Split', null, [()=>config.mouse1==='split'||config.mouse2==='split']);
   splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', {parent: mouseAbilities, path: ['split', 'count']}, 2, 2, Infinity, 1));
-  splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', {parent: mouseAbilities, path: ['split', 'strength']}, 1, 0, Infinity, .01));
+  splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', {parent: mouseAbilities, path: ['split', 'speed']}, 1, 0, Infinity, .01));
   splitContainer.addChild(new ConfigCheckbox('splitRepeats', 'Repeats', {parent: mouseAbilities, path: ['split', 'repeats']}, false));
   splitContainer.addChild(new ConfigNumber('splitInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['split', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(splitContainer);
     //-generate
   const generateContainer = new Container('generateContainer', 'Generate', null, [()=>config.mouse1==='generate'||config.mouse2==='generate']);
   generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', {parent: mouseAbilities, path: ['generate', 'count']}, 2, 1, Infinity, 1));
-  generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', {parent: mouseAbilities, path: ['generate', 'strength']}, 1, 0, Infinity, .01));
+  generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', {parent: mouseAbilities, path: ['generate', 'speed']}, 1, 0, Infinity, .01));
   generateContainer.addChild(new ConfigCheckbox('generateRepeats', 'Repeats', {parent: mouseAbilities, path: ['generate', 'repeats']}, false));
   generateContainer.addChild(new ConfigNumber('generateInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['generate', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(generateContainer);
@@ -1365,8 +1362,8 @@ function initInputs() {
 
 //changes settings based on if device is mobile
 function setupMobile() {
-  if (window.innerWidth <= 800 && window.innerHeight <= 800 ||
-      window.innerWidth <= 1000 && window.innerHeight <= 600) {
+  if (window.innerWidth <= 800 && window.innerHeight <= 1000 ||
+      window.innerWidth <= 1000 && window.innerHeight <= 800) {
     configDOM.mouse2.setValue('none');
     config.enableMouse2 = false;
   }

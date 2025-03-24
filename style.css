@@ -59,7 +59,7 @@ label {
 }
 
 input[type=number] {
-  max-width: 10rem;
+  max-width: 8rem;
   min-width: 3rem;
   padding: 8px 1rem;
   border: solid 1px var(--primary-border-color);

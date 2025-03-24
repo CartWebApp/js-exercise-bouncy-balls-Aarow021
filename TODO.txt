@@ -20,4 +20,4 @@ playable character
 collision dampening (elasticity)
 change dropdowns
 make abilities seperate from generation
-make requirements better
+keybinds
