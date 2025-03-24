@@ -244,20 +244,12 @@ class DOMElement {
     this.element.classList.remove('hidden');
   }
   //hides if any requirement is not met, shows otherwise
-  //v = value, o = origin, p = path.
   checkRequirements() {
     for (const requirement of this.requirements) {
-      if (!requirement.o2) {
-        requirement.o2 = requirement.o;
+      if (!requirement()) {
+        this.hide();
+        return;
       }
-      if (!requirement.p2) {
-        requirement.p2 = requirement.p;
-      }
-        let n2 = searchPath(requirement.o2, requirement.p2);
-        if (searchPath(requirement.o, requirement.p) != requirement.v && n2 != requirement.v) {
-          this.hide();
-          return;
-        }
     }
     this.show();
   }
@@ -1278,22 +1270,22 @@ function setAbilityRepeat(ability) {
 //creates input objects and populates settings menu 
 function initInputs() {
   //GENERAL
-  const general = new MainContainer('general', 'General', null, [{o: config, p: ['currentMenu'], v: 'general'}]);
+  const general = new MainContainer('general', 'General', null, [()=>config.currentMenu==='general']);
   general.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
   general.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
   general.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
   general.addChild(new ConfigCheckbox('collision', 'Collision', null, true));
-  general.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [{o: config, p: ['collision'], v: true}]));
-  general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [{o: config, p: ['enableAbsorb'], v: true}]));
+  general.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [()=>config.collision===true]));
+  general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [()=>config.enableAbsorb===true]));
     //-walls
   const wallContainer = new Container('wallContainer', 'Walls');
   wallContainer.addChild(new ConfigCheckbox('wallCollision', 'Wall Collision', null, true));
-  wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [{o: config, p: ['wallCollision'], v: true}]));
-  wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [{o: config, p: ['wallCollision'], v: true}]));
-  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [{o: config, p: ['wallCollision'], v: true}, {o: config,p: ['wallDeletesBalls'], v: false}]));
+  wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [()=>config.wallCollision===true&&config.deleteBalls===false]));
   general.addChild(wallContainer);
   //GENERATION
-  const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [{o: config, p: ['currentMenu'], v: 'generation'}]);
+  const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [()=>config.currentMenu==='generation']);
   generation.addChild(new ConfigNumber('ballGenCount', 'Count', null, 100, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMinSize', 'Min Size', null, 10, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMaxSize', 'Max Size', null, 20, 0, Infinity, 1));
@@ -1301,18 +1293,18 @@ function initInputs() {
     //-color
   const ballColorContainer = new Container('ballColorContainer', 'Color');
   ballColorContainer.addChild(new ConfigCheckbox('ballColorRandom', 'Random Color', null, true));
-  ballColorContainer.addChild(new ConfigSlider('ballColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{o: config, p: ['ballColorRandom'], v: false}]));
-  ballColorContainer.addChild(new ConfigSlider('ballColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{o: config, p: ['ballColorRandom'], v: false}]));
-  ballColorContainer.addChild(new ConfigSlider('ballColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{o: config, p: ['ballColorRandom'], v: false}]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorR', 'R', null, 255, 0, 255, 1, null, null, null, [()=>config.ballColorRandom===false]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorG', 'G', null, 255, 0, 255, 1, null, null, null, [()=>config.ballColorRandom===false]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorB', 'B', null, 255, 0, 255, 1, null, null, null, [()=>config.ballColorRandom===false]));
   generation.addChild(ballColorContainer);
   //ABILITIES
-  const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [{o: config, p: ['currentMenu'], v: 'abilities'}]);
+  const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [()=>config.currentMenu==='abilities']);
   const availableAbilities = Object.values(mouseAbilities).map(a => a.name);
   abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null));
-  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{o: config, p: ['enableMouse2'], v: true}]));
+  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [()=>config.enableMouse2===true]));
   const abilityLayout = new LayoutContainer('abilityLayout');
     //-push
-  const pushContainer = new Container('pushContainer', 'Push', null, [{o: config, p: ['mouse1'], p2: ['mouse2'], v: 'push'}]);
+  const pushContainer = new Container('pushContainer', 'Push', null, [()=>config.mouse1==='push'||config.mouse2==='push']);
   pushContainer.addChild(new ConfigDropdown('pushMode', 'Push Mode', {parent: mouseAbilities, path: ['push', 'mode']}, 'default', ['default', 'inverted']));
   pushContainer.addChild(new ConfigDropdown('pushType', 'Push Type', {parent: mouseAbilities, path: ['push', 'type']}, 'linear', pushTypes)); 
   pushContainer.addChild(new ConfigNumber('pushStrength', 'Push Strength', {parent: mouseAbilities, path: ['push', 'strength']}, 1.5, 0, Infinity, .01));
@@ -1320,7 +1312,7 @@ function initInputs() {
   pushContainer.addChild(new ConfigNumber('pushInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['push', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(pushContainer);
     //-pull
-  const pullContainer = new Container('pullContainer', 'Pull', null, [{o: config, p: ['mouse1'], p2: ['mouse2'], v: 'pull'}]);
+  const pullContainer = new Container('pullContainer', 'Pull', null, [()=>config.mouse1==='pull'||config.mouse2==='pull']);
   pullContainer.addChild(new ConfigDropdown('pullMode', 'Pull Mode', {parent: mouseAbilities, path: ['pull', 'mode']}, 'default', ['default', 'inverted']));
   pullContainer.addChild(new ConfigDropdown('pullType', 'Pull Type', {parent: mouseAbilities, path: ['pull', 'type']}, 'linear', pullTypes)); 
   pullContainer.addChild(new ConfigNumber('pullStrength', 'Pull Strength', {parent: mouseAbilities, path: ['pull', 'strength']}, 1.5, 0, Infinity, .01));
@@ -1328,30 +1320,30 @@ function initInputs() {
   pullContainer.addChild(new ConfigNumber('pullInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['pull', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(pullContainer);
     //-split
-  const splitContainer = new Container('splitContainer', 'Split', null, [{o: config, p: ['mouse1'], p2: ['mouse2'], v: 'split'}]);
+  const splitContainer = new Container('splitContainer', 'Split', null, [()=>config.mouse1==='split'||config.mouse2==='split']);
   splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', {parent: mouseAbilities, path: ['split', 'count']}, 2, 2, Infinity, 1));
   splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', {parent: mouseAbilities, path: ['split', 'strength']}, 1, 0, Infinity, .01));
   splitContainer.addChild(new ConfigCheckbox('splitRepeats', 'Repeats', {parent: mouseAbilities, path: ['split', 'repeats']}, false));
   splitContainer.addChild(new ConfigNumber('splitInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['split', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(splitContainer);
     //-generate
-  const generateContainer = new Container('generateContainer', 'Generate', null, [{o: config, p: ['mouse1'], p2: ['mouse2'], v: 'generate'}]);
+  const generateContainer = new Container('generateContainer', 'Generate', null, [()=>config.mouse1==='generate'||config.mouse2==='generate']);
   generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', {parent: mouseAbilities, path: ['generate', 'count']}, 2, 1, Infinity, 1));
   generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', {parent: mouseAbilities, path: ['generate', 'strength']}, 1, 0, Infinity, .01));
   generateContainer.addChild(new ConfigCheckbox('generateRepeats', 'Repeats', {parent: mouseAbilities, path: ['generate', 'repeats']}, false));
   generateContainer.addChild(new ConfigNumber('generateInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['generate', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(generateContainer);
     //-delete
-  const deleteContainer = new Container('deleteContainer', 'Delete', null, [{o: config, p: ['mouse1'], p2: ['mouse2'], v: 'delete'}]);
+  const deleteContainer = new Container('deleteContainer', 'Delete', null, [()=>config.mouse1==='delete'||config.mouse2==='delete']);
   deleteContainer.addChild(new ConfigNumber('deleteRadius', 'Delete Radius', {parent: mouseAbilities, path: ['delete', 'radius']}, 10, 0, Infinity, 1));
   abilityLayout.addChild(deleteContainer);
     //-color
-  const colorContainer = new Container('colorContainer', 'Color', null, [{o: config, p: ['mouse1'], p2: ['mouse2'], v: 'color'}]);
+  const colorContainer = new Container('colorContainer', 'Color', null, [()=>config.mouse1==='color'||config.mouse2==='color']);
   colorContainer.addChild(new ConfigNumber('clickColorRadius', 'Color Radius', {parent: mouseAbilities, path: ['color', 'radius']}, 10, 0, Infinity, 1));
   colorContainer.addChild(new ConfigCheckbox('clickColorRandom', 'Random Color', {parent: mouseAbilities, path: ['color', 'colorRandom']}, false));
-  colorContainer.addChild(new ConfigSlider('clickColorR', 'R', {parent: mouseAbilities, path: ['color', 'color', 'r']}, 255, 0, 255, 1, null, null, null, [{o: mouseAbilities, p: ['color', 'colorRandom'], v: false}]));
-  colorContainer.addChild(new ConfigSlider('clickColorG', 'G', {parent: mouseAbilities, path: ['color', 'color', 'g']}, 255, 0, 255, 1, null, null, null, [{o: mouseAbilities, p: ['color', 'colorRandom'], v: false}]));
-  colorContainer.addChild(new ConfigSlider('clickColorB', 'B', {parent: mouseAbilities, path: ['color', 'color', 'b']}, 255, 0, 255, 1, null, null, null, [{o: mouseAbilities, p: ['color', 'colorRandom'], v: false}]));
+  colorContainer.addChild(new ConfigSlider('clickColorR', 'R', {parent: mouseAbilities, path: ['color', 'color', 'r']}, 255, 0, 255, 1, null, null, null, [()=>mouseAbilities.color.colorRandom===false]));
+  colorContainer.addChild(new ConfigSlider('clickColorG', 'G', {parent: mouseAbilities, path: ['color', 'color', 'g']}, 255, 0, 255, 1, null, null, null, [()=>mouseAbilities.color.colorRandom===false]));
+  colorContainer.addChild(new ConfigSlider('clickColorB', 'B', {parent: mouseAbilities, path: ['color', 'color', 'b']}, 255, 0, 255, 1, null, null, null, [()=>mouseAbilities.color.colorRandom===false]));
   colorContainer.addChild(new ConfigNumber('colorInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['color', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(colorContainer);
   abilitiesContainer.addChild(abilityLayout);
