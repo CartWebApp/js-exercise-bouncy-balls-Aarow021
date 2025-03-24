@@ -28,7 +28,7 @@ class Game {
     this.config = {
       //misc
       enableMouse2: true,
-      currentMenu: 'general',
+      currentMenu: 'environment',
       //general
       friction: 0,
       gravityX: 0,
@@ -40,6 +40,7 @@ class Game {
       wallCollisionType: 'inner',
       wallDeletesBalls: false,
       wallElasticity: 1,
+      wallOffset: {up: 0, left: 0, down: 0, right: 0},
       //ball generation
       ballGenMinSize: 10,
       ballGenMaxSize: 20,
@@ -49,42 +50,26 @@ class Game {
       ballColorR: 255,
       ballColorG: 255,
       ballColorB: 255,
+      ballMinSpeed: 0,
+      ballMaxSpeed: Infinity,
       //click abilities
       mouse1: 'push', //command for left click
       mouse2: 'pull', //command for right click
-      clickGenerateCount: 1,
-      clickGenerateSpeed: 1,
-      deleteRadius: 10,
-      splitCount: 2,
-      splitSpeed: 1,
-      pushMode: 'default',
-      pushStrength: 1.5,
-      pushRadius: 150,
-      pushType: 'linear',
-      pullMode: 'default',
-      pullStrength: 1.5,
-      pullRadius: 200,
-      pullType: 'linear',
-      clickColorRadius: 10,
-      clickColorRandom: false,
-      clickColorR: 255,
-      clickColorG: 255,
-      clickColorB: 255,
     }
 
     //holds all the config elements and containers
     //ex: {'split-count': ConfigNumber}
     this.configDOM = {}
-    this.abilities = {}
+    this.mouseAbilities = {}
   }
 }
 
 let game = new Game();
 let config = game.config;
 let configDOM = game.configDOM;
-let abilities = game.abilities;
+let mouseAbilities = game.mouseAbilities;
 let currentSettings = {};
-let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star'];
+let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star', 'dialate', 'misc1', 'misc2'];
 let pullTypes = pushTypes;
 
 //debug menu
@@ -100,16 +85,17 @@ class Debug {
   getTouchPositions() {
     for (const touch of touchesList) {
       if (!touch) { continue }
-      this.queue.push(`Touch-${touch.id}-X: ${touch.x}`);
-      this.queue.push(`Touch-${touch.id}-Y: ${touch.y}`);
+      this.addQueue(`Touch-${touch.id}-X: ${touch.x}`);
+      this.addQueue(`Touch-${touch.id}-Y: ${touch.y}`);
     }
   }
 
   getFPS() {
     fps = Math.round(1000 / deltaTime);
-    this.queue.push(fps)
+    this.addQueue(fps)
   }
 
+  //puts queue entries in the debug menu
   printQueue() {
     if (!this.disabled) {
       this.output.innerHTML = '';
@@ -118,14 +104,23 @@ class Debug {
         row.textContent = line;
         this.output.appendChild(row);
       }
-      this.queue = [];
+      this.clearQueue();
     }
   }
 
+  //clears the queue
   clearQueue() {
     this.queue = [];
   }
 
+  //adds an entry to the queue
+  addQueue(entry) {
+    if (!this.disabled) {
+      this.queue.push(entry);
+    }
+  }
+
+  //toggles the debug menu
   toggle() {
     this.disabled = this.container.classList.toggle('hidden');
   }
@@ -136,6 +131,11 @@ let debug = new Debug();
 function random(min, max) {
   const num = Math.floor(Math.random() * (max - min + 1)) + min;
   return num;
+}
+
+//clamps a number between a min and a max
+function clamp(num, min, max) {
+  return Math.max(min, Math.min(num, max) )
 }
 
 //waits for a given time
@@ -203,12 +203,12 @@ function getMagnitude([x, y]) {
 }
 //returns the unit of a vector (length of 1)
 function unit(vector) {
-  if (vector[0] === 0) vector[0] = 1
-  if (vector[1] === 0) vector[1] = 1
+  if (vector[0] === 0) vector[0] = 10e-20;
+  if (vector[1] === 0) vector[1] = 10e-20;
   let magnitude = getMagnitude(vector);
   let unitX = vector[0] / magnitude;
-  let unitY = vector[0] / magnitude;
-  return { x: unitX, y: unitY}
+  let unitY = vector[1] / magnitude;
+  return { x: unitX, y: unitY };
 }
 
 //gets radius from mass and density
@@ -261,15 +261,10 @@ class DOMElement {
   show() {
     this.element.classList.remove('hidden');
   }
-  //gets the DOM element for this input
-  getElement() {
-    return document.getElementById(this.id);
-  }
   //hides if any requirement is not met, shows otherwise
   checkRequirements() {
     for (const requirement of this.requirements) {
-      let n2 = config[requirement.n2];
-      if (config[requirement.n] != requirement.v && n2 != requirement.v) {
+      if (!requirement()) {
         this.hide();
         return;
       }
@@ -411,9 +406,10 @@ class ConfigCheckbox extends ConfigElement {
     this.element.innerHTML = `
       <label for="${this.id}-input">${this.displayName}</label>
       <div class="checkbox-container">
-        <input type="checkbox" id="${this.id}-input" checked="${this.value}">
+        <input type="checkbox" id="${this.id}-input">
         <span class="checkmark"></span>
       </div>`;
+    this.element.querySelector("input[type=checkbox]").checked = this.value;
   }
 
   addEventListeners() {
@@ -569,12 +565,29 @@ class LayoutContainer extends Container {
 
 //base class for abilities
 class Ability {
-  constructor(name, repeats, interval=20) {
+  constructor(name, repeats, interval, radius, strength, speed, count, color, colorRandom, ...params) {
     this.name = name;
     this.repeats = repeats;
-    this.interval = interval;
+    this.interval = interval ?? 20;
+    this.radius = radius ?? 0;
+    this.strength = strength ?? 1;
+    this.count = count ?? Infinity;
+    this.color = color ?? {r: 255, g: 255, b: 255};
+    this.colorRandom = colorRandom ?? false; //default or random
+    this.speed = speed ?? 1;
+    this.params = params ?? []
+    for (const param of this.params) {
+      this[param.name] = param.value;
+    }
   }
 }
+
+class MouseAbility extends Ability {
+  constructor(name, repeats, interval, radius, strength, speed, count, color, colorRandom, ...params) {
+    super(name, repeats, interval, radius, strength, speed, count, color, colorRandom, ...params)
+  }
+}
+
 
 //ball class
 class Ball {
@@ -670,15 +683,9 @@ class Ball {
     let smallerBall = ball2.mass <= this.mass ? ball2 : this;
     let massRatio = smallerBall.mass / biggerBall.mass;
     //color
-    if (config.ballColorRandom) {
-      biggerBall.r = ((biggerBall.r + smallerBall.r) / 2 + random(0, 255) * 2) / 3;
-      biggerBall.g = ((biggerBall.g + smallerBall.g) / 2  + random(0, 255) * 2) / 3;
-      biggerBall.b = ((biggerBall.b + smallerBall.b) / 2  + random(0, 255) * 2) / 3;
-    } else {
       biggerBall.r = (biggerBall.r + smallerBall.r * massRatio) / (1 + massRatio);
       biggerBall.g = (biggerBall.g + smallerBall.g * massRatio) / (1 + massRatio);
       biggerBall.b = (biggerBall.b + smallerBall.b * massRatio) / (1 + massRatio);
-    }
     //momentum
     biggerBall.momentumX += smallerBall.momentumX;
     biggerBall.momentumY += smallerBall.momentumY;
@@ -744,27 +751,27 @@ class Ball {
       else if (config.wallCollisionType === 'center') ( offset = 0 )
       else if (config.wallCollisionType === 'outer') ( offset = -this.radius )
 
-      if ((this.x + offset) >= width) {
+      if ((this.x + offset + config.wallOffset.right) >= width) {
         this.momentumX = -(this.momentumX) * wallElasticity;
-        this.x = width - offset;
+        this.x = width - offset - config.wallOffset.right;
         collided = true;
       }
   
-      if ((this.x - offset) <= 0) {
+      if ((this.x - offset - config.wallOffset.left) <= 0) {
         this.momentumX = -(this.momentumX) * wallElasticity;
-        this.x = 0 + offset;
+        this.x = 0 + offset + config.wallOffset.left;
         collided = true;
       }
   
-      if ((this.y + offset) >= height) {
+      if ((this.y + offset + config.wallOffset.down) >= height) {
         this.momentumY = -(this.momentumY) * wallElasticity;
-        this.y = height - offset;
+        this.y = height - offset - config.wallOffset.down;
         collided = true;
       }
   
-      if ((this.y - offset) <= 0) {
+      if ((this.y - offset - config.wallOffset.up) <= 0) {
         this.momentumY = -(this.momentumY) * wallElasticity;
-        this.y = 0 + offset;
+        this.y = 0 + offset + config.wallOffset.up;
         collided = true;
       }
       if (config.wallDeletesBalls && collided) {
@@ -788,8 +795,16 @@ class Ball {
       this.momentumY = 0;
     }
 
-    this.x += this.velX;
-    this.y += this.velY;
+    let xSign = (this.velX > 0) ? 1: -1;
+    let ySign = (this.velY > 0) ? 1: -1;
+    let magnitude = getMagnitude([this.velX, this.velY])
+    let unitVelocity = unit([this.velX, this.velY]);
+    let clampedVelocity = {
+      x: clamp(Math.abs(unitVelocity.x * magnitude), config.ballMinSpeed, config.ballMaxSpeed),
+      y: clamp(Math.abs(unitVelocity.y * magnitude), config.ballMinSpeed, config.ballMaxSpeed)
+    }
+    this.x += clampedVelocity.x * xSign;
+    this.y += clampedVelocity.y * ySign;
 
     if (isNaN(this.x) || isNaN(this.y)) {
       this.delete();
@@ -797,9 +812,8 @@ class Ball {
   }
   
   //splits a ball into 2 or more
-  split(splits) {
+  split(splits, splitSpeed=1) {
     let randomDeg = random(0, 360);
-    let splitSpeed = config.splitSpeed;
     for (let i = 0; i < splits; i++) {
       let newVelocity = rotateVector(
         1 * splitSpeed,
@@ -807,6 +821,7 @@ class Ball {
         360 / splits * i + randomDeg
       )
       let newSize = massToRadius(this.mass / splits, this.density);
+      if (newSize <= .033) {continue} //min size
       addBalls(
         1,
         newSize,
@@ -814,7 +829,8 @@ class Ball {
         this.y,
         null,
         newVelocity.x,
-        newVelocity.y
+        newVelocity.y,
+        [this.r, this.g, this.b]
       );
     }
     balls.splice(balls.indexOf(this), 1);
@@ -854,7 +870,7 @@ function rgbStringToObject(str) {
 }
 
 //generates color based on config settings
-function generateColor(source='generated') {
+function generateColor(source='generated', ability=null) {
   if (source === 'generated') {
     if (config.ballColorRandom) {
       return [random(0,255), random(0,255), random(0,255)]
@@ -862,10 +878,10 @@ function generateColor(source='generated') {
       return [config.ballColorR, config.ballColorG, config.ballColorB];
     }
   } else if (source === 'ability') {
-    if (config.clickColorRandom) {
+    if (ability.colorRandom === true) {
       return [random(0,255), random(0,255), random(0,255)]
     } else {
-      return [config.clickColorR, config.clickColorG, config.clickColorB];
+      return [ability.color.r, ability.color.g, ability.color.b];
     }
   }
 }
@@ -878,8 +894,8 @@ function addBalls(num, size, x, y, speed, vx, vy, color) {
     let ball = new Ball(
       // ball position always drawn at least one ball width
       // away from the edge of the canvas, to avoid drawing errors
-      x ?? random(0 + radius,width - radius),
-      y ?? random(0 + radius,height - radius),
+      x ?? random(0 + config.wallOffset.left + radius, width - config.wallOffset.right - radius),
+      y ?? random(0 + config.wallOffset.up + radius, height - config.wallOffset.down - radius),
       vx ?? random(-newSpeed * 100,newSpeed * 100) / 100,
       vy ?? random(-newSpeed * 100,newSpeed * 100) / 100,
       color ?? generateColor(),
@@ -968,63 +984,37 @@ function inputHandler(e) {
 }
 
 //does an action to every ball that meets a given condition
-function checkAllCollisions(x, y, radius, action, condition) {
+function checkAllCollisions(x, y, radius, maxCollisions, action, condition) {
   if (!condition) {
     condition = (ball, dist) => dist < ball.radius + radius;
   }
+  let collisionCount = 0;
   for (let j = 0; j < balls.length; j++) {
     let distance = getDistance([x, y], [balls[j].x, balls[j].y])
     if (condition(balls[j], distance)) {
       action(balls[j], distance);
-    }
-  }
-}
-
-//does an action to every ball that is not colliding with a radius
-function checkAllNonCollisions(x, y, radius, action) {
-  for (let j = 0; j < balls.length; j++) {
-    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
-    if (distance > balls[j].radius + radius) {
-      action(balls[j], distance);
-    }
-  }
-}
-
-//does an action to every ball that is not colliding with a radius
-function checkAllNonCollisions(x, y, radius, action) {
-  for (let j = 0; j < balls.length; j++) {
-    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
-    if (distance > balls[j].radius + radius) {
-      action(balls[j], distance);
-    }
-  }
-}
-
-//does an action to the first ball that is colliding with a radius
-function checkOneCollision(x, y, radius, action) {
-  for (let j = 0; j < balls.length; j++) {
-    let distance = getDistance([x, y], [balls[j].x, balls[j].y])
-    if (distance < balls[j].radius + radius) {
-      action(balls[j], distance);
-      return;
+      collisionCount++;
+      if (maxCollisions && collisionCount >= maxCollisions) {
+        return;
+      }
     }
   }
 }
 
 //deletes balls within a radius
 function deleteBalls(x, y, radius) {
-  checkAllCollisions(x, y, radius, (ball) => {
+  checkAllCollisions(x, y, radius, null, (ball) => {
     balls.splice(balls.indexOf(ball), 1);
-  })
+    }, (ball, dist) => dist < ball.radius + radius)
 }
 
 //colors balls within a radius
 function colorBalls(x, y, radius, [r, g, b]) {
-  checkAllCollisions(x, y, radius, (ball) => {
+  checkAllCollisions(x, y, radius, null, (ball) => {
     ball.r = r;
     ball.g = g;
     ball.b = b;
-  })
+    }, (ball, dist) => dist < ball.radius + radius)
 }
 
 //adds to velocity of an object
@@ -1033,14 +1023,15 @@ function applyForce(object, forceX, forceY) {
 }
 
 //applies a force to a ball based on its distance to a point
-function generateForce(ball, type, mode, dist, x, y, strength) {
+function generateForce(ball, type, direction, dist, x, y, strength) {
   let forceX, forceY;
     let xSign = (x - ball.x > 0) ? 1: -1;
-    let YSign = (y - ball.y > 0) ? 1: -1;
+    let ySign = (y - ball.y > 0) ? 1: -1;
+    dist = dist || 10e-20
 
     if (type === 'star') {
-      forceX = (strength * 100) / (x - ball.x) / (dist * dist);
-      forceY = (strength * 100) / (y - ball.y) / (dist * dist);
+      forceX = (strength * 200) / (x - ball.x) / (dist * dist);
+      forceY = (strength * 200) / (y - ball.y) / (dist * dist);
     } else if (type === 'linear') {
       forceX = (strength / 1000) * (x - ball.x);
       forceY = (strength / 1000) * (y - ball.y);
@@ -1048,20 +1039,32 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
       forceX = (strength / 10) * (x - ball.x) / dist;
       forceY = (strength / 10) * (y - ball.y) / dist;
     } else if (type === 'cross1') {
-      forceX = (strength / 10) / (x - ball.x);
-      forceY = (strength / 10) / (y - ball.y);
+      forceX = (strength / 2) / (x - ball.x);
+      forceY = (strength / 2) / (y - ball.y);
     } else if (type === 'cross2') {
-      forceX = (strength / 100) * Math.log10(dist) * xSign;
-      forceY = (strength / 100) * Math.log10(dist) * YSign;
+      forceX = (strength / 50) * Math.log10(dist) * xSign;
+      forceY = (strength / 50) * Math.log10(dist) * ySign;
     } else if(type === 'cross3') {
-      forceX = (strength / 500) / (x - ball.x) * dist;
-      forceY = (strength / 500) / (y - ball.y) * dist;
+      forceX = (strength / 150) / (x - ball.x) * dist;
+      forceY = (strength / 150) / (y - ball.y) * dist;
     } else if (type === 'cross4') {
-      forceX = (strength * 10) / (x - ball.x) / dist;
-      forceY = (strength * 10) / (y - ball.y) / dist;
+      forceX = (strength * 30) / (x - ball.x) / dist;
+      forceY = (strength * 30) / (y - ball.y) / dist;
+    } else if (type === 'dialate') {
+      forceX = (strength / 100000) * (x - ball.x) * dist;
+      forceY = (strength / 100000) * (y - ball.y) * dist;
+    } else if (type === 'misc1') {
+      forceX = (strength / 500) * (x - ball.x) * (x - ball.x) / dist * xSign;
+      forceY = (strength / 500) * (y - ball.y) * (y - ball.y) / dist * ySign;
+    } else if (type === 'misc2') {
+      forceX = (x - ball.x);
+      forceY = (y - ball.y);
+      let norm = unit([forceX, forceY]);
+      forceX = norm.x * xSign * (strength / 8)
+      forceY = norm.y * ySign * (strength / 8)
     }
 
-    if (mode === 'pull') {
+    if (direction === 'pull') {
       forceX = -forceX;
       forceY = -forceY;
     }
@@ -1069,65 +1072,65 @@ function generateForce(ball, type, mode, dist, x, y, strength) {
     applyForce(ball, forceX, forceY);
 }
 
-//applies force to all balls in a radius
-function forceBalls(x, y, radius, strength, mode, type='linear') {
-  if (mode === 'push' && config.pushMode === 'default') {
-    checkAllCollisions(x, y, radius, (ball, dist) => {
-      generateForce(ball, type, mode, dist, x, y, strength)
-    })
-  } else if (mode === 'push' && config.pushMode === 'inverted') {
-    checkAllNonCollisions(x, y, radius, (ball, dist) => {
-      generateForce(ball, type, mode, dist, x, y, strength)
-    })
-  } else if (mode === 'pull' && config.pullMode === 'default') {
-    checkAllCollisions(x, y, radius, (ball, dist) => {
-      generateForce(ball, type, mode, dist, x, y, strength)
-    })
-  } else if (mode === 'pull' && config.pullMode === 'inverted') {
-    checkAllNonCollisions(x, y, radius, (ball, dist) => {
-      generateForce(ball, type, mode, dist, x, y, strength)
-    })
+//applies force to all balls in/out a radius
+function forceBalls(x, y, radius, strength, direction, type='linear', mode='default', condition=()=>true) {
+  if (direction === 'push' && mode === 'default') {
+    checkAllCollisions(x, y, radius, null, (ball, dist) => {
+      generateForce(ball, type, direction, dist, x, y, strength)
+    }, (ball, dist) => dist < ball.radius + radius && condition())
+  } else if (direction === 'push' && mode === 'inverted') {
+    checkAllCollisions(x, y, radius, null, (ball, dist) => {
+      generateForce(ball, type, direction, dist, x, y, strength)
+    }, (ball, dist) => dist > ball.radius + radius && condition())
+  } else if (direction === 'pull' && mode === 'default') {
+    checkAllCollisions(x, y, radius, null, (ball, dist) => {
+      generateForce(ball, type, direction, dist, x, y, strength)
+    }, (ball, dist) => dist < ball.radius + radius && condition())
+  } else if (direction === 'pull' && mode === 'inverted') {
+    checkAllCollisions(x, y, radius, null, (ball, dist) => {
+      generateForce(ball, type, direction, dist, x, y, strength)
+    }, (ball, dist) => dist > ball.radius + radius && condition())
   }
 }
 
 //attracts balls to a point
-function pullBalls(x, y, radius, strength, type) {
-  forceBalls(x, y, radius, strength, 'pull', type);
+function pullBalls(x, y, radius, strength, type, mode) {
+  forceBalls(x, y, radius, strength, 'pull', type, mode);
 }
 
 //pushes balls away from a point
-function pushBalls(x, y, radius, strength, type) {
-  forceBalls(x, y, radius, strength, 'push', type);
+function pushBalls(x, y, radius, strength, type, mode) {
+  forceBalls(x, y, radius, strength, 'push', type, mode);
 }
 
 //uses an ability at a coordinate
 function useAbility(ability, [x, y]) {
-  if (ability === 'generate') {
-    addBalls(config.clickGenerateCount, null, x, y, config.clickGenerateSpeed)
-  } else if (ability === 'delete') {
-    deleteBalls(x, y, config.deleteRadius);
-  } else if (ability === 'split') {
-    checkOneCollision(x, y, 1, (ball) => {
-      ball.split(config.splitCount);
-    }) 
-  } else if (ability === 'push') {
-    pushBalls(x, y, config.pushRadius, config.pushStrength, config.pushType);
-  } else if (ability === 'pull') {
-    pullBalls(x, y, config.pullRadius, config.pullStrength, config.pullType);
-  } else if (ability === 'color') {
-    colorBalls(x, y, config.clickColorRadius, generateColor('ability'));
+  if (ability.name === 'generate') {
+    addBalls(ability.count, null, x, y, ability.speed)
+  } else if (ability.name === 'delete') {
+    deleteBalls(x, y, ability.radius);
+  } else if (ability.name === 'split') {
+    checkAllCollisions(x, y, ability.radius, ability.strength, (ball) => {
+      ball.split(ability.count, ability.speed);
+    }, (ball, dist) => dist < ball.radius + ability.radius) 
+  } else if (ability.name === 'push') {
+    pushBalls(x, y, ability.radius, ability.strength, ability.type, ability.mode);
+  } else if (ability.name === 'pull') {
+    pullBalls(x, y, ability.radius, ability.strength, ability.type, ability.mode);
+  } else if (ability.name === 'color') {
+    colorBalls(x, y, ability.radius, generateColor('ability', ability));
   } 
 }
 
 //repeats an ability at a given interval until the condition is not met.
 //the x and y positions are dynamically generated by the coordGetter function
-async function repeatAbility(ability, interval, coordGetter, condition) {
+async function repeatAbility(ability, coordGetter, condition) {
   if (!condition) {
     condition = () => false;
   }
   do {
     useAbility(ability, coordGetter())
-    await sleep(interval || 1);
+    await sleep(ability.interval || 1);
   } while(condition()) ;
 }
 
@@ -1145,19 +1148,19 @@ function clickHandler(e) {
   let isMouseDown;
 
   if (e.button === 0) { //left mouse
-    ability = abilities[config.mouse1];
+    ability = mouseAbilities[config.mouse1];
     mouse1Down = true;
     isMouseDown = () => mouse1Down;
   } else if (e.button === 2) { //right mouse
-    ability = abilities[config.mouse2];
+    ability = mouseAbilities[config.mouse2];
     mouse2Down = true;
     isMouseDown = () => mouse2Down;
   }
 
   if (ability.repeats) {
-    repeatAbility(ability.name, ability.interval, ()=>[mouseX, mouseY], isMouseDown);
+    repeatAbility(ability, ()=>[mouseX, mouseY], isMouseDown);
   } else {
-    useAbility(ability.name, [mouseX, mouseY]);
+    useAbility(ability, [mouseX, mouseY]);
   }
 }
 
@@ -1165,16 +1168,16 @@ function clickHandler(e) {
 function touchHandler(e) {
   e.preventDefault();
   e.stopPropagation();
-  let ability = abilities[config.mouse1];
+  let ability = mouseAbilities[config.mouse1];
   let touches = e.targetTouches;
   for (const touch of touches) {
     let id = touch.identifier
-    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {/*delete touchesList[id]*/}, 15000)}
+    touchesList[id] = {id: id, x: touch.clientX, y: touch.clientY, timeoutId: setTimeout(() => {/*delete touchesList[id]*/}, 100)}
   
     if (ability.repeats) {
-      repeatAbility(ability.name, ability.interval, ()=>getTouchCoords(id), ()=>touchesList[id]);
+      repeatAbility(ability, ()=>getTouchCoords(id), ()=>touchesList[id]);
     } else {
-      useAbility(ability.name, [touch.clientX, touch.clientY])
+      useAbility(ability, [touch.clientX, touch.clientY])
     }
   }
 }
@@ -1190,7 +1193,7 @@ function touchMoveHandler(e) {
     clearTimeout(touchesList[id].timeoutId);
     touchesList[id].x = touch.clientX;
     touchesList[id].y = touch.clientY;
-    touchesList[id].timeoutId = setTimeout(() => {delete touchesList[identifier]}, 10000);
+    touchesList[id].timeoutId = setTimeout(() => {/*delete touchesList[identifier]*/}, 100);
   }
 }
 
@@ -1273,13 +1276,13 @@ function addEventListeners() {
 
 //generates ability settings
 function initAbilities() {
-  abilities.none = new Ability('none', false);
-  abilities.push = new Ability('push', true);
-  abilities.pull = new Ability('pull', true);
-  abilities.split = new Ability('split', false);
-  abilities.generate = new Ability('generate', false);
-  abilities.delete = new Ability('delete', true, 5);
-  abilities.color = new Ability('color', true);
+  mouseAbilities.none = new MouseAbility('none', false);
+  mouseAbilities.push = new MouseAbility('push', true, null, 150, 1, null, null, null, null, {name: 'mode', value: 'default'}, {name: 'type', value: 'linear'});
+  mouseAbilities.pull = new MouseAbility('pull', true, null, 150, 1, null, null, null, null, {name: 'mode', value: 'default'}, {name: 'type', value: 'linear'});
+  mouseAbilities.split = new MouseAbility('split', false, null, 0, 1, 1, 2);
+  mouseAbilities.generate = new MouseAbility('generate', false, null, null, null, 1, 1);
+  mouseAbilities.delete = new MouseAbility('delete', true, 5, 10);
+  mouseAbilities.color = new MouseAbility('color', true, null, 10, null, null, null, {r: 255, g: 255, b: 255}, false);
 }
 
 //sets whether an ability repeats
@@ -1289,23 +1292,24 @@ function setAbilityRepeat(ability) {
 
 //creates input objects and populates settings menu 
 function initInputs() {
-  //GENERAL
-  const general = new MainContainer('general', 'General', null, [{n: 'currentMenu', v: 'general'}]);
-  general.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
-  general.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
-  general.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
-  general.addChild(new ConfigCheckbox('collision', 'Collision', null, true));
-  general.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [{n: 'collision', v: true}]));
-  general.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [{n: 'enableAbsorb', v: true}]));
+  //ENVIRONMENT
+  const environment = new MainContainer('environment', 'Environment', null, [()=>config.currentMenu==='environment']);
+  environment.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
+  environment.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
+  environment.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
     //-walls
   const wallContainer = new Container('wallContainer', 'Walls');
   wallContainer.addChild(new ConfigCheckbox('wallCollision', 'Wall Collision', null, true));
-  wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [{n: 'wallCollision', v: true}]));
-  wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [{n: 'wallCollision', v: true}]));
-  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [{n: 'wallCollision', v: true}]));
-  general.addChild(wallContainer);
+  wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [()=>config.wallCollision===true&&config.wallDeletesBalls===false]));
+  wallContainer.addChild(new ConfigNumber('wallOffsetUp', 'Top Offset', {parent: config, path: ['wallOffset', 'up']}, 0, -Infinity, Infinity, 1));
+  wallContainer.addChild(new ConfigNumber('wallOffsetRight', 'Right Offset', {parent: config, path: ['wallOffset', 'right']}, 0, -Infinity, Infinity, 1));
+  wallContainer.addChild(new ConfigNumber('wallOffsetDown', 'Bottom Offset', {parent: config, path: ['wallOffset', 'down']}, 0, -Infinity, Infinity, 1));
+  wallContainer.addChild(new ConfigNumber('wallOffsetLeft', 'Left Offset', {parent: config, path: ['wallOffset', 'left']}, 0, -Infinity, Infinity, 1));
+  environment.addChild(wallContainer);
   //GENERATION
-  const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [{n: 'currentMenu', v: 'generation'}]);
+  const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [()=>config.currentMenu==='generation']);
   generation.addChild(new ConfigNumber('ballGenCount', 'Count', null, 100, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMinSize', 'Min Size', null, 10, 0, Infinity, 1));
   generation.addChild(new ConfigNumber('ballGenMaxSize', 'Max Size', null, 20, 0, Infinity, 1));
@@ -1313,80 +1317,90 @@ function initInputs() {
     //-color
   const ballColorContainer = new Container('ballColorContainer', 'Color');
   ballColorContainer.addChild(new ConfigCheckbox('ballColorRandom', 'Random Color', null, true));
-  ballColorContainer.addChild(new ConfigSlider('ballColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
-  ballColorContainer.addChild(new ConfigSlider('ballColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
-  ballColorContainer.addChild(new ConfigSlider('ballColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{n: 'ballColorRandom', v: false}]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorR', 'R', null, 255, 0, 255, 1, null, null, null, [()=>config.ballColorRandom===false]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorG', 'G', null, 255, 0, 255, 1, null, null, null, [()=>config.ballColorRandom===false]));
+  ballColorContainer.addChild(new ConfigSlider('ballColorB', 'B', null, 255, 0, 255, 1, null, null, null, [()=>config.ballColorRandom===false]));
   generation.addChild(ballColorContainer);
+  //BALLS
+  const ballSettings = new MainContainer('ballSettings', 'Ball Settings', null, [()=>config.currentMenu==='ballSettings']);
+  ballSettings.addChild(new ConfigCheckbox('collision', 'Collision', null, true));
+  ballSettings.addChild(new ConfigCheckbox('enableAbsorb', 'Absorb', null, false, [()=>config.collision===true]));
+  ballSettings.addChild(new ConfigNumber('absorbThresh', 'Absorb Resistance', null, 0, 0, Infinity, 1, [()=>config.enableAbsorb===true]));
+  // ballSettings.addChild(new ConfigNumber('ballMaxSpeed', 'Max Speed', null, Infinity, 0, Infinity, .1));
   //ABILITIES
-  const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [{n: 'currentMenu', v: 'abilities'}]);
-  const availableAbilities = Object.values(abilities).map(a => a.name);
+  const abilitiesContainer = new MainContainer('abilities', 'Abilities', null, [()=>config.currentMenu==='abilities']);
+  const availableAbilities = Object.values(mouseAbilities).map(a => a.name);
   abilitiesContainer.addChild(new ConfigDropdown('mouse1', 'Power 1', null, 'push', availableAbilities, null));
-  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [{n: 'enableMouse2', v: true}]));
+  abilitiesContainer.addChild(new ConfigDropdown('mouse2', 'Power 2', null, 'pull', availableAbilities, [()=>config.enableMouse2===true]));
   const abilityLayout = new LayoutContainer('abilityLayout');
     //-push
-  const pushContainer = new Container('pushContainer', 'Push', null, [{n: 'mouse1', n2: 'mouse2', v: 'push'}]);
-  pushContainer.addChild(new ConfigDropdown('pushMode', 'Push Mode', null, 'default', ['default', 'inverted']));
-  pushContainer.addChild(new ConfigDropdown('pushType', 'Push Type', null, 'linear', pushTypes)); 
-  pushContainer.addChild(new ConfigNumber('pushStrength', 'Push Strength', null, 1.5, 0, Infinity, .01));
-  pushContainer.addChild(new ConfigNumber('pushRadius', 'Push Radius', null, 1.5, 0, Infinity, .01));
-  pushContainer.addChild(new ConfigNumber('pushInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['push', 'interval']}, 50, 0, Infinity, 1));
+  const pushContainer = new Container('pushContainer', 'Push', null, [()=>config.mouse1==='push'||config.mouse2==='push']);
+  pushContainer.addChild(new ConfigDropdown('pushMode', 'Push Mode', {parent: mouseAbilities, path: ['push', 'mode']}, 'default', ['default', 'inverted']));
+  pushContainer.addChild(new ConfigDropdown('pushType', 'Push Type', {parent: mouseAbilities, path: ['push', 'type']}, 'linear', pushTypes)); 
+  pushContainer.addChild(new ConfigNumber('pushStrength', 'Push Strength', {parent: mouseAbilities, path: ['push', 'strength']}, 1.5, 0, Infinity, 1));
+  pushContainer.addChild(new ConfigNumber('pushRadius', 'Push Radius', {parent: mouseAbilities, path: ['push', 'radius']}, 1.5, 0, Infinity, 1));
+  pushContainer.addChild(new ConfigNumber('pushInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['push', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(pushContainer);
     //-pull
-  const pullContainer = new Container('pullContainer', 'Pull', null, [{n: 'mouse1', n2: 'mouse2', v: 'pull'}]);
-  pullContainer.addChild(new ConfigDropdown('pullMode', 'Pull Mode', null, 'default', ['default', 'inverted']));
-  pullContainer.addChild(new ConfigDropdown('pullType', 'Pull Type', null, 'linear', pullTypes)); 
-  pullContainer.addChild(new ConfigNumber('pullStrength', 'Pull Strength', null, 1.5, 0, Infinity, .01));
-  pullContainer.addChild(new ConfigNumber('pullRadius', 'Pull Radius', null, 1.5, 0, Infinity, .01));
-  pullContainer.addChild(new ConfigNumber('pullInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['pull', 'interval']}, 50, 0, Infinity, 1));
+  const pullContainer = new Container('pullContainer', 'Pull', null, [()=>config.mouse1==='pull'||config.mouse2==='pull']);
+  pullContainer.addChild(new ConfigDropdown('pullMode', 'Pull Mode', {parent: mouseAbilities, path: ['pull', 'mode']}, 'default', ['default', 'inverted']));
+  pullContainer.addChild(new ConfigDropdown('pullType', 'Pull Type', {parent: mouseAbilities, path: ['pull', 'type']}, 'linear', pullTypes)); 
+  pullContainer.addChild(new ConfigNumber('pullStrength', 'Pull Strength', {parent: mouseAbilities, path: ['pull', 'strength']}, 1.5, 0, Infinity, 1));
+  pullContainer.addChild(new ConfigNumber('pullRadius', 'Pull Radius', {parent: mouseAbilities, path: ['pull', 'radius']}, 1.5, 0, Infinity, 1));
+  pullContainer.addChild(new ConfigNumber('pullInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['pull', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(pullContainer);
     //-split
-  const splitContainer = new Container('splitContainer', 'Split', null, [{n: 'mouse1', n2: 'mouse2', v: 'split'}]);
-  splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', null, 2, 2, Infinity, 1));
-  splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', null, 1, 0, Infinity, .01));
-  splitContainer.addChild(new ConfigCheckbox('splitRepeats', 'Repeats', {parent: abilities, path: ['split', 'repeats']}, false));
-  splitContainer.addChild(new ConfigNumber('splitInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['split', 'interval']}, 50, 0, Infinity, 1));
+  const splitContainer = new Container('splitContainer', 'Split', null, [()=>config.mouse1==='split'||config.mouse2==='split']);
+  splitContainer.addChild(new ConfigNumber('splitCount', 'Split Count', {parent: mouseAbilities, path: ['split', 'count']}, 2, 2, Infinity, 1));
+  splitContainer.addChild(new ConfigNumber('splitSpeed', 'Split Speed', {parent: mouseAbilities, path: ['split', 'speed']}, 1, 0, Infinity, .01));
+  splitContainer.addChild(new ConfigNumber('splitTargets', '# of Targets', {parent: mouseAbilities, path: ['split', 'strength']}, 1, 1, Infinity, 1));
+  splitContainer.addChild(new ConfigNumber('splitRadius', 'Split Radius', {parent: mouseAbilities, path: ['split', 'radius']}, 0, 0, Infinity, 1));
+  splitContainer.addChild(new ConfigCheckbox('splitRepeats', 'Repeats', {parent: mouseAbilities, path: ['split', 'repeats']}, false));
+  splitContainer.addChild(new ConfigNumber('splitInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['split', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(splitContainer);
     //-generate
-  const generateContainer = new Container('generateContainer', 'Generate', null, [{n: 'mouse1', n2: 'mouse2', v: 'generate'}]);
-  generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', null, 2, 1, Infinity, 1));
-  generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', null, 1, 0, Infinity, .01));
-  generateContainer.addChild(new ConfigCheckbox('generateRepeats', 'Repeats', {parent: abilities, path: ['generate', 'repeats']}, false));
-  generateContainer.addChild(new ConfigNumber('generateInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['generate', 'interval']}, 50, 0, Infinity, 1));
+  const generateContainer = new Container('generateContainer', 'Generate', null, [()=>config.mouse1==='generate'||config.mouse2==='generate']);
+  generateContainer.addChild(new ConfigNumber('clickGenerateCount', 'Generate Count', {parent: mouseAbilities, path: ['generate', 'count']}, 2, 1, Infinity, 1));
+  generateContainer.addChild(new ConfigNumber('clickGenerateSpeed', 'Generate Speed', {parent: mouseAbilities, path: ['generate', 'speed']}, 1, 0, Infinity, .01));
+  generateContainer.addChild(new ConfigCheckbox('generateRepeats', 'Repeats', {parent: mouseAbilities, path: ['generate', 'repeats']}, false));
+  generateContainer.addChild(new ConfigNumber('generateInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['generate', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(generateContainer);
     //-delete
-  const deleteContainer = new Container('deleteContainer', 'Delete', null, [{n: 'mouse1', n2: 'mouse2', v: 'delete'}]);
-  deleteContainer.addChild(new ConfigNumber('deleteRadius', 'Delete Radius', null, 10, 0, Infinity, 1));
+  const deleteContainer = new Container('deleteContainer', 'Delete', null, [()=>config.mouse1==='delete'||config.mouse2==='delete']);
+  deleteContainer.addChild(new ConfigNumber('deleteRadius', 'Delete Radius', {parent: mouseAbilities, path: ['delete', 'radius']}, 10, 0, Infinity, 1));
   abilityLayout.addChild(deleteContainer);
     //-color
-  const colorContainer = new Container('colorContainer', 'Color', null, [{n: 'mouse1', n2: 'mouse2', v: 'color'}]);
-  colorContainer.addChild(new ConfigNumber('clickColorRadius', 'Color Radius', null, 10, 0, Infinity, 1));
-  colorContainer.addChild(new ConfigCheckbox('clickColorRandom', 'Random Color', null, true));
-  colorContainer.addChild(new ConfigSlider('clickColorR', 'R', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
-  colorContainer.addChild(new ConfigSlider('clickColorG', 'G', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
-  colorContainer.addChild(new ConfigSlider('clickColorB', 'B', null, 255, 0, 255, 1, null, null, null, [{n: 'clickColorRandom', v: false}]));
-  colorContainer.addChild(new ConfigNumber('colorInterval', 'Repeat Interval(ms)', {parent: abilities, path: ['color', 'interval']}, 50, 0, Infinity, 1));
+  const colorContainer = new Container('colorContainer', 'Color', null, [()=>config.mouse1==='color'||config.mouse2==='color']);
+  colorContainer.addChild(new ConfigNumber('clickColorRadius', 'Color Radius', {parent: mouseAbilities, path: ['color', 'radius']}, 10, 0, Infinity, 1));
+  colorContainer.addChild(new ConfigCheckbox('clickColorRandom', 'Random Color', {parent: mouseAbilities, path: ['color', 'colorRandom']}, false));
+  colorContainer.addChild(new ConfigSlider('clickColorR', 'R', {parent: mouseAbilities, path: ['color', 'color', 'r']}, 255, 0, 255, 1, null, null, null, [()=>mouseAbilities.color.colorRandom===false]));
+  colorContainer.addChild(new ConfigSlider('clickColorG', 'G', {parent: mouseAbilities, path: ['color', 'color', 'g']}, 255, 0, 255, 1, null, null, null, [()=>mouseAbilities.color.colorRandom===false]));
+  colorContainer.addChild(new ConfigSlider('clickColorB', 'B', {parent: mouseAbilities, path: ['color', 'color', 'b']}, 255, 0, 255, 1, null, null, null, [()=>mouseAbilities.color.colorRandom===false]));
+  colorContainer.addChild(new ConfigNumber('colorInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['color', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(colorContainer);
   abilitiesContainer.addChild(abilityLayout);
 
   const settingsContainer = document.querySelector('.settings-col');
-  settingsContainer.appendChild(general.element);
+  settingsContainer.appendChild(environment.element);
   settingsContainer.appendChild(generation.element);
+  settingsContainer.appendChild(ballSettings.element);
   settingsContainer.appendChild(abilitiesContainer.element);
-  general.addEventListeners();
+  environment.addEventListeners();
   generation.addEventListeners();
+  ballSettings.addEventListeners();
   abilitiesContainer.addEventListeners();
 
   for (const object of Object.values(configDOM)) {
     if (object.type === 'input') {
-      object.setValue(object.getConfigValue());
+      object.setValue(object.getConfigValue(), true);
     }
   }
 }
 
 //changes settings based on if device is mobile
 function setupMobile() {
-  if (window.innerWidth <= 800 && window.innerHeight <= 800 ||
-      window.innerWidth <= 1000 && window.innerHeight <= 600) {
+  if (window.innerWidth <= 800 && window.innerHeight <= 1000 ||
+      window.innerWidth <= 1000 && window.innerHeight <= 800) {
     configDOM.mouse2.setValue('none');
     config.enableMouse2 = false;
   }
@@ -1407,7 +1421,7 @@ async function init() {
 
   updateMenu();
 
-  selectSection('general');
+  selectSection('environment');
   
   //generates the balls
   addBalls(config.ballGenCount);
