@@ -36,6 +36,7 @@ class Game {
       collision: true,
       enableAbsorb: false,
       absorbThresh: 0, //min combined velocity to absorb
+      backgroundColor: 'rgba(0, 0, 0, 1)',
       wallCollision: true,
       wallCollisionType: 'inner',
       wallDeletesBalls: false,
@@ -529,6 +530,7 @@ class ConfigColor extends ConfigElement {
     if (convertedValue.a == null) {convertedValue.a = 1}
     this.value = convertedValue;
     this.setConfigValue(`rgba(${convertedValue.r}, ${convertedValue.g}, ${convertedValue.b}, ${convertedValue.a})`);
+    this.element.querySelector('input[type=range]').style.backgroundColor = 'transparent';
     this.element.querySelector('input[type=range]').style.backgroundImage = `linear-gradient(to right, transparent, ${rgbToHex(this.value.r, this.value.g, this.value.b)})`;
 
     if (overrideDOM) {
@@ -925,7 +927,7 @@ function loop(currentTime) {
   lastTime = currentTime;
 
   if (playing) {
-    ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+    ctx.fillStyle = config.backgroundColor;
     ctx.fillRect(0, 0, width, height);
     for (let i = 0; i < balls.length; i++) {
       balls[i]?.update();
@@ -1486,6 +1488,7 @@ function initInputs() {
   environment.addChild(new ConfigSlider('gravityY', 'Gravity-Y', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
   environment.addChild(new ConfigSlider('gravityX', 'Gravity-X', null, 0, -Infinity, Infinity, .001, -1, 1, .02));
   environment.addChild(new ConfigSlider('friction', 'Friction', null, 0, -Infinity, Infinity, .0001, 0, 1, .001));
+  environment.addChild(new ConfigColor('backgroundColor', 'Background Color', {parent: config, path: ['backgroundColor']}));
     //-walls
   const wallContainer = new Container('wallContainer', 'Walls');
   wallContainer.addChild(new ConfigCheckbox('wallCollision', 'Wall Collision', null, true));
