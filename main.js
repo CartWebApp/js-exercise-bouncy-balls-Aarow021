@@ -69,7 +69,15 @@ class Game {
       primaryTextColor: 'rgba(255, 255, 255, 1)',
       iconInactive: 'rgba(255, 255, 255, 0.8)',
       iconActive: 'rgba(253, 255, 219, 1)',
-      borderGlowing: false
+      borderGlowing: false,
+      overlayHorizontal: false,
+      overlayVertical: false,
+      overlayColor: 'rgba(0, 0, 0, 0.25)',
+      overlaySize: 4,
+      overlayMode: 'crt',
+      overlayEnable: false,
+      overlayShadow: false,
+      overlayFlicker: false,
     }
   }
 }
@@ -1068,7 +1076,9 @@ function buttonHandler(e) {
 //updates the ui and overlay
 function updateDisplay() {
   for (let [name, value] of Object.entries(displaySettings)) {
-    if (name === 'bgBlur') { value = value + 'px'}
+
+    if (name === 'bgBlur' || name === 'overlaySize') { value = value + 'px'}
+
     let propertyName = name.split(/(?=[A-Z])/).join('-').toLowerCase();
     if (window.getComputedStyle(document.documentElement).getPropertyValue('--' + propertyName) != ''){
       document.documentElement.style.setProperty('--' + propertyName, value);
@@ -1084,6 +1094,47 @@ function updateDisplay() {
         settings.classList.remove('glowing')
       }
     }
+    else if (name === 'overlayEnable') {
+      if (value === true) {
+        document.getElementById('screenOverlay').classList.remove('hidden')
+      } else {
+        document.getElementById('screenOverlay').classList.add('hidden')
+      }
+    }
+    else if (name === 'overlayHorizontal') {
+      if (value === true) {
+        document.getElementById('screenOverlay').classList.add('horizontal')
+      } else {
+        document.getElementById('screenOverlay').classList.remove('horizontal')
+      }
+    }
+    else if (name === 'overlayVertical') {
+      if (value === true) {
+        document.getElementById('screenOverlay').classList.add('vertical')
+      } else {
+        document.getElementById('screenOverlay').classList.remove('vertical')
+      }
+    } else if (name === 'overlayMode') {
+      if (value === 'custom') {
+        document.getElementById('screenOverlay').classList.add('custom')
+        document.getElementById('screenOverlay').classList.remove('crt')
+      } else if (value === 'crt') {
+        document.getElementById('screenOverlay').classList.add('crt')
+        document.getElementById('screenOverlay').classList.remove('custom')
+      }
+    } else if (name === 'overlayShadow') {
+      if (value === true) {
+        document.getElementById('page-wrapper').classList.add('shadow')
+      } else {
+        document.getElementById('page-wrapper').classList.remove('shadow')
+      }
+    } else if (name === 'overlayFlicker') {
+      if (value === true) {
+        document.getElementById('screenOverlay').classList.add('flicker')
+      } else {
+        document.getElementById('screenOverlay').classList.remove('flicker')
+      }
+    } 
   }
 }
 
@@ -1441,10 +1492,10 @@ function initInputs() {
   wallContainer.addChild(new ConfigDropdown('wallCollisionType', 'Collision Type', null, 'inner', ['inner', 'center', 'outer'], [()=>config.wallCollision===true]));
   wallContainer.addChild(new ConfigCheckbox('wallDeletesBalls', 'Deletes Balls', null, false, [()=>config.wallCollision===true]));
   wallContainer.addChild(new ConfigSlider('wallElasticity', 'Elasticity', null, 1, 0, Infinity, .01, 0, 1, .01, [()=>config.wallCollision===true&&config.wallDeletesBalls===false]));
-  wallContainer.addChild(new ConfigNumber('wallOffsetUp', 'Top Offset', {parent: config, path: ['wallOffset', 'up']}, 0, -Infinity, Infinity, 1));
-  wallContainer.addChild(new ConfigNumber('wallOffsetRight', 'Right Offset', {parent: config, path: ['wallOffset', 'right']}, 0, -Infinity, Infinity, 1));
-  wallContainer.addChild(new ConfigNumber('wallOffsetDown', 'Bottom Offset', {parent: config, path: ['wallOffset', 'down']}, 0, -Infinity, Infinity, 1));
-  wallContainer.addChild(new ConfigNumber('wallOffsetLeft', 'Left Offset', {parent: config, path: ['wallOffset', 'left']}, 0, -Infinity, Infinity, 1));
+  wallContainer.addChild(new ConfigNumber('wallOffsetUp', 'Top Offset', {parent: config, path: ['wallOffset', 'up']}, 0, -Infinity, Infinity, 1, [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigNumber('wallOffsetRight', 'Right Offset', {parent: config, path: ['wallOffset', 'right']}, 0, -Infinity, Infinity, 1, [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigNumber('wallOffsetDown', 'Bottom Offset', {parent: config, path: ['wallOffset', 'down']}, 0, -Infinity, Infinity, 1, [()=>config.wallCollision===true]));
+  wallContainer.addChild(new ConfigNumber('wallOffsetLeft', 'Left Offset', {parent: config, path: ['wallOffset', 'left']}, 0, -Infinity, Infinity, 1, [()=>config.wallCollision===true]));
   environment.addChild(wallContainer);
   //GENERATION
   const generation = new MainContainer('ballGeneration', 'Ball Generation', null, [()=>config.currentMenu==='generation']);
@@ -1529,6 +1580,17 @@ function initInputs() {
   displayContainer.addChild(colorLayout);
   displayContainer.addChild(new ConfigNumber('bgBlur', 'Background Blur', {parent: displaySettings, path: ['bgBlur']}, 16, 0, Infinity, 1));
   displayContainer.addChild(new ConfigCheckbox('borderGlowing', 'Border Glow', {parent: displaySettings, path: ['borderGlowing']}, false));
+    //-overlay
+  const overlayContainer = new Container('overlayContainer', 'Overlay');
+  overlayContainer.addChild(new ConfigCheckbox('overlayEnable', 'Enable Overlay', {parent: displaySettings, path: ['overlayEnable']}, false));
+  overlayContainer.addChild(new ConfigDropdown('overlayMode', 'Overlay Mode', {parent: displaySettings, path: ['overlayMode']}, 'crt', ['crt', 'custom'], [()=>displaySettings.overlayEnable===true])); 
+  overlayContainer.addChild(new ConfigCheckbox('overlayHorizontal', 'Horizontal Lines', {parent: displaySettings, path: ['overlayHorizontal']}, false, [()=>displaySettings.overlayEnable===true&&displaySettings.overlayMode==='custom']));
+  overlayContainer.addChild(new ConfigCheckbox('overlayVertical', 'Vertical Lines', {parent: displaySettings, path: ['overlayVertical']}, false, [()=>displaySettings.overlayEnable===true&&displaySettings.overlayMode==='custom']));
+  overlayContainer.addChild(new ConfigColor('overlayColor', 'Color', {parent: displaySettings, path: ['overlayColor']}, null, null, [()=>displaySettings.overlayEnable===true&&displaySettings.overlayMode==='custom']));
+  overlayContainer.addChild(new ConfigNumber('overlaySize', 'Pixel Size', {parent: displaySettings, path: ['overlaySize']}, 4, 0, Infinity, 1, [()=>displaySettings.overlayEnable===true&&displaySettings.overlayMode==='custom']));
+  overlayContainer.addChild(new ConfigCheckbox('overlayShadow', 'Text Shadow', {parent: displaySettings, path: ['overlayShadow']}, false, [()=>displaySettings.overlayEnable===true]));
+  overlayContainer.addChild(new ConfigCheckbox('overlayFlicker', 'Flickering', {parent: displaySettings, path: ['overlayFlicker']}, false, [()=>displaySettings.overlayEnable===true]));
+  displayContainer.addChild(overlayContainer);
 
   const settingsContainer = document.querySelector('.settings-col');
   settingsContainer.appendChild(environment.element);
