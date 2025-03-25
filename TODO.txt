@@ -9,7 +9,6 @@ maxspeed and minspeed in ball physics
 auto generate balls
 presets
 choose color of ball generation and click
-color power
 freeze/slow power
 stationary abilities (can animate)
 have powers only affect certain colors and sizes
@@ -21,3 +20,5 @@ collision dampening (elasticity)
 change dropdowns
 make abilities seperate from generation
 keybinds
+ball elasticity
+ball lifetime
