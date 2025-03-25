@@ -59,8 +59,18 @@ class Game {
 
     //holds all the config elements and containers
     //ex: {'split-count': ConfigNumber}
-    this.configDOM = {}
-    this.mouseAbilities = {}
+    this.configDOM = {};
+    this.mouseAbilities = {};
+    this.displaySettings = {
+      primaryBorderColor: 'rgba(255, 255, 255, 0.25)',
+      primaryBgColor: 'rgba(0, 0, 0, 0.85)',
+      secondaryBgColor: 'rgba(255, 255, 255, 0.036)',
+      bgBlur: 16,
+      primaryTextColor: 'rgba(255, 255, 255, 1)',
+      iconInactive: 'rgba(255, 255, 255, 0.8)',
+      iconActive: 'rgba(253, 255, 219, 1)',
+      borderGlowing: false
+    }
   }
 }
 
@@ -69,6 +79,7 @@ let config = game.config;
 let configDOM = game.configDOM;
 let mouseAbilities = game.mouseAbilities;
 let currentSettings = {};
+let displaySettings = game.displaySettings
 let pushTypes = ['linear', 'constant', 'cross1', 'cross2', 'cross3', 'cross4', 'star', 'dialate', 'misc1', 'misc2'];
 let pullTypes = pushTypes;
 
@@ -349,7 +360,7 @@ class ConfigNumber extends ConfigElement {
   }
 }
 
-//class for number inputs
+//class for slider inputs
 class ConfigSlider extends ConfigElement {
   constructor(id, displayName, bindedConfig, value, min, max, step, sliderMin, sliderMax, sliderStep, requirements, action) {
     super(id, 'slider', displayName, bindedConfig, value ?? 0, requirements, action);
@@ -395,7 +406,7 @@ class ConfigSlider extends ConfigElement {
   }
 }
 
-//class for number inputs
+//class for checkbox inputs
 class ConfigCheckbox extends ConfigElement {
   constructor(id, displayName, bindedConfig, value, requirements, action) {
     super(id, 'checkbox', displayName, bindedConfig, value ?? 0, requirements, action);
@@ -425,7 +436,7 @@ class ConfigCheckbox extends ConfigElement {
   }
 }
 
-//class for number inputs
+//class for dropdown inputs
 class ConfigDropdown extends ConfigElement {
   constructor(id, displayName, bindedConfig, value, options, requirements, action) {
     super(id, 'dropdown', displayName, bindedConfig, value ?? 0, requirements, action);
@@ -452,6 +463,69 @@ class ConfigDropdown extends ConfigElement {
     this.setConfigValue(newValue);
     if (overrideDOM) {
       this.element.querySelector('select').value = newValue;
+    }
+  }
+}
+
+//class for color inputs
+class ConfigColor extends ConfigElement {
+  //value should be in the form {r: 0, g: 0, b: 0, a: 0}
+  constructor(id, displayName, bindedConfig, value, allowAlpha, requirements, action) {
+    super(id, 'color', displayName, bindedConfig, value ?? {r: 0, g: 0, b: 0}, requirements, action);
+    this.allowAlpha = allowAlpha ?? true;
+    this.generateInner();
+  }
+
+  generateInner() {
+    if (this.allowAlpha) {
+      this.element.innerHTML = `
+        <label for="${this.id}-input">${this.displayName}</label>
+        <div class="color-container">
+          <input type="color" id="${this.id}-input" value="${rgbToHex(this.value.r, this.value.g, this.value.b)}">
+          <input type="range" id="${this.id}-input-slider" value="${this.value.a}" min="0" max="1" step=".01">
+        </div>`
+    } else {
+      this.element.innerHTML = `
+        <label for="${this.id}-input">${this.displayName}</label>
+        <div class="color-container">
+          <input type="color" id="${this.id}-input" value="${rgbToHex(this.value.r, this.value.g, this.value.b)}">
+          <input type="range" id="${this.id}-input-slider" class="hidden" value="${this.value.a}" min="0" max="1" step=".01">
+        </div>`
+    }
+  }
+
+  addEventListeners() {
+    const colorInput = this.element.querySelector('input[type=color]');
+    const slider = this.element.querySelector('input[type=range]');
+    colorInput.addEventListener('input', (e) => {
+      inputHandler(e);
+    })
+    slider.addEventListener('input', (e) => {
+      inputHandler(e);
+    })
+  }
+
+  setValue(newValue, overrideDOM=true) {
+    let convertedValue;
+    if (typeof newValue === 'object') {
+      convertedValue = newValue;
+    } else if (!isNaN(Number(newValue))) {
+      convertedValue = {r: this.value.r, g: this.value.g, b: this.value.b, a: Number(newValue)}
+    } else if (newValue.includes('#')) {
+      let rgb = rgbStringToArray(hexToRGB(newValue));
+      convertedValue = {r: rgb[0], g: rgb[1], b: rgb[2], a: rgb[3] ?? this.value.a}
+    } else if (newValue.includes('rgb')) {
+      let rgb = rgbStringToArray(newValue);
+      convertedValue = {r: rgb[0], g: rgb[1], b: rgb[2], a: rgb[3] ?? this.value.a}
+    } 
+    if (convertedValue.a == null) {convertedValue.a = 1}
+    this.value = convertedValue;
+    this.setConfigValue(`rgba(${convertedValue.r}, ${convertedValue.g}, ${convertedValue.b}, ${convertedValue.a})`);
+    this.element.querySelector('input[type=range]').style.backgroundImage = `linear-gradient(to right, transparent, ${rgbToHex(this.value.r, this.value.g, this.value.b)})`;
+
+    if (overrideDOM) {
+      this.element.querySelector('input[type=color]').value = rgbToHex(convertedValue.r, convertedValue.g, convertedValue.b);
+      this.element.querySelector('input[type=range]').value = convertedValue.a;
     }
   }
 }
@@ -842,32 +916,66 @@ function loop(currentTime) {
   deltaTime = currentTime - lastTime;
   lastTime = currentTime;
 
-  ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-  ctx.fillRect(0, 0, width, height);
-  for (let i = 0; i < balls.length; i++) {
-    balls[i]?.update();
-    balls[i]?.collisionDetect();
-    balls[i]?.draw();
-    
+  if (playing) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+    ctx.fillRect(0, 0, width, height);
+    for (let i = 0; i < balls.length; i++) {
+      balls[i]?.update();
+      balls[i]?.collisionDetect();
+      balls[i]?.draw();
+    }
+    visibleCtx.drawImage(hiddenCanvas, 0, 0);
   }
-
-  visibleCtx.drawImage(hiddenCanvas, 0, 0);
-
-  requestId = requestAnimationFrame(loop);
 
   // debug.getTouchPositions();
   debug.getFPS();
   debug.printQueue();
+  
+  requestId = requestAnimationFrame(loop);
 }
 
 //converts a string of the form 'rgb(0,0,0) 
 //into an array [r, g, b]'
-function rgbStringToObject(str) {
+function rgbStringToArray(str) {
   const startIndex = str.indexOf('(') + 1;
   const endIndex = str.indexOf(')');
   const rgbValues = str.substring(startIndex, endIndex).split(',').map(Number);
   return rgbValues;
 }
+
+//converts an rgb object into a string
+function rgbObjectToString(rgb) {
+  if (!rgb.a) {
+    return `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`
+  } else {
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${rgb.a})`
+  }
+}
+
+//turns a number into hexadecimal equivalent
+function componentToHex(c) {
+  var hex = c.toString(16);
+  return hex.length == 1 ? "0" + hex : hex;
+}
+
+//converts rgb to het
+function rgbToHex(r, g, b) {
+  return "#" + componentToHex(r) + componentToHex(g) + componentToHex(b);
+}
+
+//converts hex to rgb
+function hexToRGB(hex, alpha) {
+  var r = parseInt(hex.slice(1, 3), 16),
+      g = parseInt(hex.slice(3, 5), 16),
+      b = parseInt(hex.slice(5, 7), 16);
+
+  if (alpha) {
+      return `rgba(${r},${g},${b},${alpha})`;
+  } else {
+      return `rgb(${r},${g},${b})`;
+  }
+}
+
 
 //generates color based on config settings
 function generateColor(source='generated', ability=null) {
@@ -909,14 +1017,12 @@ function addBalls(num, size, x, y, speed, vx, vy, color) {
 //pauses the animation
 function stopCanvas() {
   playing = false;
-  cancelAnimationFrame(requestId);
 }
 
 //resumes animation
 function startCanvas() {
   if (playing) { return }
   playing = true;
-  requestAnimationFrame(loop);
 }
 
 //toggles a settings menu main section
@@ -959,6 +1065,28 @@ function buttonHandler(e) {
   }
 }
 
+//updates the ui and overlay
+function updateDisplay() {
+  for (let [name, value] of Object.entries(displaySettings)) {
+    if (name === 'bgBlur') { value = value + 'px'}
+    let propertyName = name.split(/(?=[A-Z])/).join('-').toLowerCase();
+    if (window.getComputedStyle(document.documentElement).getPropertyValue('--' + propertyName) != ''){
+      document.documentElement.style.setProperty('--' + propertyName, value);
+    }
+    if (name === 'borderGlowing') {
+      const sideNav = document.querySelector('nav');
+      const settings = document.getElementById('settings');
+      if (value === true) {
+        sideNav.classList.add('glowing')
+        settings.classList.add('glowing')
+      } else {
+        sideNav.classList.remove('glowing')
+        settings.classList.remove('glowing')
+      }
+    }
+  }
+}
+
 //updates the elements in menu; some may need to be hidden, others shown
 function updateMenu() {
   for (const config of Object.values(configDOM)) {
@@ -980,7 +1108,10 @@ function inputHandler(e) {
   if (input.action) {
     input.action(input);
   }
-  updateMenu()
+  updateMenu();
+  if (input.bindedConfig.parent === displaySettings) {
+    updateDisplay();
+  }
 }
 
 //does an action to every ball that meets a given condition
@@ -1272,6 +1403,13 @@ function addEventListeners() {
 
   //keypress events
   window.addEventListener('keyup', keyHandler)
+
+  //when the tab becomes inactive
+  document.addEventListener("visibilitychange", function() {
+    if (!document.hidden) {
+      lastTime = performance.now()
+    }
+  });
 }
 
 //generates ability settings
@@ -1379,16 +1517,30 @@ function initInputs() {
   colorContainer.addChild(new ConfigNumber('colorInterval', 'Repeat Interval(ms)', {parent: mouseAbilities, path: ['color', 'interval']}, 50, 0, Infinity, 1));
   abilityLayout.addChild(colorContainer);
   abilitiesContainer.addChild(abilityLayout);
+  //DISPLAY/UI
+  const displayContainer = new MainContainer('display', 'Display Settings', null, [()=>config.currentMenu==='display']);
+  const colorLayout = new LayoutContainer('colorLayout');
+  colorLayout.addChild(new ConfigColor('primaryBorderColor', 'Border Color', {parent: displaySettings, path: ['primaryBorderColor']}));
+  colorLayout.addChild(new ConfigColor('primaryBgColor', 'Background Color 1', {parent: displaySettings, path: ['primaryBgColor']}));
+  colorLayout.addChild(new ConfigColor('secondaryBgColor', 'Background Color 2', {parent: displaySettings, path: ['secondaryBgColor']}));
+  colorLayout.addChild(new ConfigColor('primaryTextColor', 'Text Color', {parent: displaySettings, path: ['primaryTextColor']}));
+  colorLayout.addChild(new ConfigColor('iconInactive', 'Icon Color', {parent: displaySettings, path: ['iconInactive']}));
+  colorLayout.addChild(new ConfigColor('iconActive', 'Active Icon Color', {parent: displaySettings, path: ['iconActive']}));
+  displayContainer.addChild(colorLayout);
+  displayContainer.addChild(new ConfigNumber('bgBlur', 'Background Blur', {parent: displaySettings, path: ['bgBlur']}, 16, 0, Infinity, 1));
+  displayContainer.addChild(new ConfigCheckbox('borderGlowing', 'Border Glow', {parent: displaySettings, path: ['borderGlowing']}, false));
 
   const settingsContainer = document.querySelector('.settings-col');
   settingsContainer.appendChild(environment.element);
   settingsContainer.appendChild(generation.element);
   settingsContainer.appendChild(ballSettings.element);
   settingsContainer.appendChild(abilitiesContainer.element);
+  settingsContainer.appendChild(displayContainer.element);
   environment.addEventListeners();
   generation.addEventListeners();
   ballSettings.addEventListeners();
   abilitiesContainer.addEventListeners();
+  displayContainer.addEventListeners();
 
   for (const object of Object.values(configDOM)) {
     if (object.type === 'input') {

@@ -1,8 +1,14 @@
 
 :root {
-  --blur-bg-color: rgba(0, 0, 0, 0.85);
+  --primary-bg-color: rgba(0, 0, 0, 0.85);
+  --secondary-bg-color: rgba(255, 255, 255, 0.036);
+  --bg-blur: 16px;
   --primary-border-color: rgba(255, 255, 255, 0.25);
-  --button-active: rgb(253, 255, 219);
+  --primary-text-color: white;
+  --icon-inactive: rgba(255, 255, 255, 0.801);
+  --icon-active: rgb(253, 255, 219);
+  --overlay-color: rgba(0, 0, 0, 0.493);
+  --overlay-size: 4px;
 }
 
 * {
@@ -48,8 +54,8 @@ button {
   -webkit-tap-highlight-color: transparent;
 }
 
-h1, h2, h3, p, label {
-  color: white;
+h1, h2, h3, p, label, input, select {
+  color: var(--primary-text-color);
   margin: 0;
 }
 
@@ -61,11 +67,11 @@ label {
 input[type=number] {
   max-width: 8rem;
   min-width: 3rem;
+  margin-left: 4px;
   padding: 8px 1rem;
   border: solid 1px var(--primary-border-color);
   border-radius: 8px;
   background-color: rgba(255, 255, 255, 0.08);
-  color: white;
   font-family: "Inter", sans-serif;
   font-size: 20px;
   font-weight: 200;
@@ -84,7 +90,6 @@ select {
   border: solid 1px var(--primary-border-color);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.08);
-  color: white;
   font-family: "Inter", sans-serif;
   font-size: 20px;
   font-weight: 200;
@@ -114,7 +119,7 @@ input[type=range]::-webkit-slider-thumb {
   cursor: pointer;
   width: 8px;
   height: 20px;
-  background-color: white;
+  background-color: var(--icon-inactive);
 }
 
 ::-webkit-scrollbar {
@@ -171,13 +176,17 @@ hr {
   pointer-events: none;
 }
 
+.glowing {
+  box-shadow: 0 0 12px var(--primary-border-color);
+}
+
 nav {
   overflow: hidden;
   position: absolute;
   top: 2rem;
   left: 2rem;
-  background-color: var(--blur-bg-color);
-  backdrop-filter: blur(16px) opacity(100%);
+  background-color: var(--primary-bg-color);
+  backdrop-filter: blur(var(--bg-blur));
   border: solid 1px var(--primary-border-color);
   border-radius: 64px;
   max-height: 340px;
@@ -200,7 +209,7 @@ nav .wrap {
 .icon-wrap button {
   height: 100%;
   width: 100%;
-  background-color: white;
+  background-color: var(--icon-inactive);
   border: none;
   cursor: pointer;
   mask-repeat: no-repeat;
@@ -275,6 +284,9 @@ nav:not(:has(#menu-toggle.active)) {
 #abilities-toggle {
   mask-image: url(imgs/tap.svg);
 }
+#display-toggle {
+  mask-image: url(imgs/computer.svg);
+}
 
 
 #settings {
@@ -289,8 +301,8 @@ nav:not(:has(#menu-toggle.active)) {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: var(--blur-bg-color);
-  backdrop-filter: blur(16px) opacity(100%);
+  background-color: var(--primary-bg-color);
+  backdrop-filter: blur(var(--bg-blur)) opacity(100%);
   border: solid 1px var(--primary-border-color);
   border-radius: 1rem;
   display: flex;
@@ -344,16 +356,16 @@ nav:not(:has(#menu-toggle.active)) {
 }
 
 .settings-heading .nav .icon-wrap button {
-  background-color: rgba(255, 255, 255, 0.801);
+  background-color: var(--icon-inactive);
   transition: 200ms ease;
 }
 
 .settings-heading .nav .icon-wrap button.active {
-  background-color: var(--button-active);
+  background-color: var(--icon-active);
 }
 
 .settings-heading .nav .icon-wrap:has(button.active) {
-  filter: drop-shadow(0 0 8px var(--button-active));
+  filter: drop-shadow(0 0 8px var(--icon-active));
 }
 
 .icon-wrap:has(#settings-close) {
@@ -383,7 +395,7 @@ nav:not(:has(#menu-toggle.active)) {
 .settings-section {
   padding: clamp(4px, 2%, 1rem);
   border: solid 1px var(--primary-border-color);
-  background-color: rgba(255, 255, 255, 0.036);
+  background-color: var(--secondary-bg-color);
 }
 
 .settings-section h3 {
@@ -394,6 +406,7 @@ nav:not(:has(#menu-toggle.active)) {
   width: 100%;
   display: flex;
   flex-flow: row wrap;
+  justify-content: space-between;
   gap: 2rem;
 }
 
@@ -452,7 +465,7 @@ input[type=checkbox]:hover {
 }
 
 .checkmark {
-  background-image: url('imgs/check.svg');
+  mask-image: url('imgs/check.svg');
 }
 
 .checkbox-container {
@@ -465,12 +478,15 @@ input[type=checkbox]:hover {
   height: 70%;
   top: 50%;
   left: 50%;
-  background-repeat: no-repeat;
-  background-size: contain;
   pointer-events: none;
   transform: translate(-50%, -10%) scale(.5);
   opacity: 0;
   transition: 200ms cubic-bezier(0.175, 0.885, 0.32, 1.575);
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  mask-position: center;
+  mask-size: 100%;
+  background-color: var(--icon-inactive);
 }
 
 .checkbox-container:has(input:checked) .checkmark {
@@ -494,6 +510,33 @@ input[type=checkbox]:hover {
   text-transform: capitalize;
 }
 
+.color-row {
+  flex-direction: column;
+}
+
+.color-row input[type=range] {
+  margin-left: 0;
+  margin-right: 1rem;
+}
+
+.settings-layout .color-row {
+  flex-basis: 20rem;
+  flex-grow: 1;
+}
+
+input[type=color] {
+  appearance: none;
+  background-color: transparent;
+  width: 64px;
+  height: 32px;
+  border: none;
+  cursor: pointer;
+}
+
+input[type=color]::-webkit-color-swatch {
+  border: 1px solid #ffffff;
+}
+
 #debug {
   width: 80vw;
   height: 80vh;
@@ -504,7 +547,7 @@ input[type=checkbox]:hover {
   border: solid 1px var(--primary-border-color);
   border-radius: 16px;
   position: absolute;
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(var(--bg-blur));
   padding: 1rem;
 }
 
@@ -517,6 +560,33 @@ input[type=checkbox]:hover {
   display: block;
   max-height: 80%;
   overflow-y: auto;
+}
+
+#screenOverlay {
+  position: absolute;
+  z-index: 10;
+  pointer-events: none;
+  width: 100%;
+  height: 100%;
+  left: 0;
+  top: 0;
+  transform-origin: center;
+  filter: blur(.7px);
+}
+
+#screenOverlay.vertical {
+  background-image: linear-gradient(to left, var(--overlay-color), transparent);
+  background-size: var(--overlay-size) 100%;
+}
+
+#screenOverlay.horizontal {
+  background-image: linear-gradient(to bottom, var(--overlay-color), transparent);
+  background-size: 100% var(--overlay-size);
+}
+
+#screenOverlay.vertical.horizontal {
+  background-image: linear-gradient(to left, var(--overlay-color), transparent), linear-gradient(to bottom, var(--overlay-color), transparent);
+  background-size: var(--overlay-size) 100%, 100% var(--overlay-size);
 }
 
 @media screen and (max-width: 700px) {
